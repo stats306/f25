@@ -1,0 +1,380 @@
+---
+title: "DATASCI 306 Week 1"
+format: revealjs
+revealjs-plugins:
+  - drop
+drop:
+  engine: webr
+  webr:
+    packages:
+      - tidyverse
+      - dslabs
+---
+## Administrative
+
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+library(dslabs)
+```
+
+```{=html}
+<style>
+.qrcode img {
+  margin: 20px auto;
+}
+</style>
+```
+
+-  Prof. Jonathan Terhorst (<jonth@umich>)
+-  Office hours:
+   - Monday 9:30-11am (Zoom)
+   - Friday 3:30-5pm (252 West Hall)
+-  No labs this week
+
+# What this course is about
+
+## Learning how to explore and reason with data
+
+-  Getting data from various sources (files, databases, web APIs)
+-  Cleaning
+-  Summarizing
+-  Visualizing
+-  Analyzing
+
+## Analyzing different types of data
+
+-   Numerical data
+-   Categorical data (factors)
+-   Text / strings
+-   Dates and times
+
+## R programming
+
+-   Functions
+-   Abstraction
+-   Vectors / lists
+-   Iteration
+
+### Statistical inference
+
+-   Hypothesis testing
+-   Regression
+
+## How you are assessed
+
+-   Completing in the in-class quizzes on Canvas (10%)
+-   Homework assignments, due approximately every two weeks (20%)
+-   Two in-class midterms (20% each)
+-   Final project (30%)
+
+## More about the in-class quizzes
+
+-   Starting from next lecture, there will be a short quiz and the end on the concepts that were covered.
+-   These can not be made up, so please attend class. (The lowest 4 scores will be dropped.)
+-   Quizzes are done on Canvas, so bring a laptop or tablet to class.
+
+## More about the exams
+
+-   Exams are in-class at the dates shown on the syllabus.
+-   Closed book, **no devices of any sort allowed**.
+-   Exam-type questions that you should be capable of answering without a computer are marked with a "✍" on the homework assignments.
+
+# ChatGPT
+
+
+## ChatGPT policy
+
+-   In my experience, ChatGPT can mostly do the homework assignments.
+-   You are allowed to use ChatGPT to help you with the homework assignments if you want.
+-   But you will not have the opportunity to use ChatGPT on the exams. Think carefully about this.
+
+
+## Thoughts on ChatGPT
+> AI will not replace humans, but humans who use AI will replace those who do not.
+
+- ChatGPT is a valuable tool for data science and you are encouraged to use it.
+- *However*, you will not have access to ChatGPT on the midterms. 
+- Understanding basic data science skills and concepts makes you much more effective
+  at harnessing a tool like ChatGPT to study data.
+
+## Thoughts on ChatGPT
+
+:::: {.columns}
+::: {.column width="70%"}
+-   Many/most of you will working at companies in the next 1-2 years.
+-   Jobs that can be completely automated by ChatGPT, will be.
+-   We all (myself included) need to think about what value we add to our 
+    jobs beyond what can be automated by AI.
+-   I hope this course will help you to do that.
+:::
+
+::: {.column width="5%"}
+:::
+
+::: {.column width="25%"}
+![](images/clipboard-1340473423.png){width=400}
+:::
+::::
+
+# Getting set up
+
+## Installing R
+-  R is great for data sci and has a lower learning curve than Python (IMO).
+-  R is a programming language and software environment for statistical computing and graphics.
+-  R is free and open source. 
+-  You can use any text editor to write R code, but I highly recommend [RStudio](https://posit.co/download/rstudio-desktop/).
+
+## Installing `tidyverse`
+-  `tidyverse` is a collection of R packages that are designed for data science.
+-  To install `tidyverse` onto your machine, open R or RStudio and run the following command:
+```{r eval=F}
+install.packages("tidyverse")
+```
+-  You only need to do this once (installation). Then, each time you start `R`,
+load the package by running:
+```{r eval=F}
+library(tidyverse)
+```
+-  I will always assume that you have loaded `tidyverse` in this course. 
+
+# First steps in R
+
+## Getting some data
+
+Let's dive right in. We need some data!
+
+<https://ds306.org/survey1>
+
+{{< qrcode https://ds306.org/survey1 width=300 height=300 >}}
+
+## Loading our data
+
+-   We will learn many ways to load data.
+-   First we will use a simple CSV file.
+-   R will download it from the Internet and load it into a data frame.
+
+```{r}
+#| echo: true
+heights <- read_csv("https://ds306.org/data/survey1.csv")
+```
+
+## Variables
+-  We just created a **data frame** called `heights`. 
+-  We say that `heights` is a **variable** that refers to a data frame.
+-  Note that R has a funky way of assigning a value to a variable, `<-`. 
+   But regular old `=` works too.
+
+## Vectors
+-  A **vector** is a sequence of data elements of the same basic type.
+-  (Don't be put off by the jargon. A vector is just a list of things.)
+-  Creating vectors in R is so common that there is a special function for it: `c()`.
+
+```{r}
+#| echo: true
+c(1, 2, 3)
+1:10
+```
+
+## Operations on vectors
+
+-  Vectors have a length:
+```{r}
+length(1:10)
+```
+-  You can do arithmetic on vectors:
+```{r}
+#| echo: true
+1:3 + 2:4
+```
+-  You can access individual entries in a vector using square brackets:
+```{r}
+#| echo: true
+c(1, 2, 3)[3]
+```
+
+## Data frames
+-   A data frame is a table of data, like a spreadsheet.
+-   You can see the first few rows of a data frame by typing its name:
+```{r}
+#| echo: true
+heights
+```
+    
+# Second steps in R
+    
+## Operations on data frames
+You can use the command `glimpse()` to get a quick overview of a data frame:
+
+```{r}
+#| echo: true
+glimpse(heights)
+```
+
+-  `glimpse()` is an example of a **function** in R: it takes some input (in this case, a data frame) and produces some output (in this case, a summary of the data frame).
+    
+## Changing the column names
+-  The column names are a bit long. Let's change them.
+
+```{r}
+#| echo: true
+colnames(heights) <- c("timestamp", "sex", "height")
+glimpse(heights)
+```
+
+-  `colnames()` is a function that gets or sets the column names of a data frame.
+- Assignment in R is a bit peculiar. In other languages you might write something
+  like ```heights.colnames = newnames``` or ```heights.setColnames(newnames)```.
+
+
+## Some other data frame properties
+`nrow()` and `ncol()` are functions that return the number of rows and columns in a data frame, respectively.
+
+```{r}
+#| echo: true
+nrow(heights)
+ncol(heights)
+```
+
+
+## Accessing data in a data frame
+-   You can access a column of a data frame using the `$` operator:
+    ```{r}
+    #| echo: true
+    heights$height
+    ```
+-   This is a **vector** of numbers, which is a basic data type in R.
+
+# Different types of data
+
+## Data types in R
+-   R distinguishes between different types of data.
+-   `heights$height` is a vector of numbers (numeric data type).
+-   `heights$sex` is a vector of text (character data type).
+
+## Continuous data
+What can we do with continuous/numerical data?
+
+-  Calculate the mean, median, standard deviation, etc.
+-  Create histograms, boxplots, etc.
+-  Run $t$-tests.
+-  Run regressions.
+    
+    
+## Categorical data
+-   `heights$sex` is a vector of *categorical data* -- each entry can only 
+    take on one of three different values:
+```{r}
+#| echo: true
+head(heights$sex)  # head() prints the first few entries
+```
+    
+## Categorical data
+What can we do with categorical data? 
+
+-  Count the number of entries in each category (tabulation).
+-  Create bar plots, pie charts, etc.
+-  Run chi-squared tests.
+
+# Some basic analysis
+
+## Tabulating categorical data
+
+```{r}
+table(heights$sex)
+```
+    
+## Studying our data set
+-    What are some interesting questions you want to ask about this data set?
+
+
+## Summarizing the data
+-   Summary statistics give us a quick overview of the data.
+    ```{r}
+    #| echo: true
+    mean(heights$height)
+    sd(heights$height)
+    ```
+-   Notice that I did *not* write `mean(heights)` -- why?
+
+## Summarizing categorical data
+-   Does `mean(heights$sex)` make sense? Why not?
+-   To summarize categorical data, we can use the `table()` function:
+    ```{r}
+    #| echo: true
+    table(heights$sex)
+    ```
+    
+    
+## Visualizing the data
+-   Visualizing the data means plotting it in some way.
+-   **Compared to staring at numbers, it is often _much_ easier to spot patterns in the data when we visualize it in an appropriate way** (somehow, our eyes/brains have evolved to be very good at this).
+
+## Histogram
+-   A histogram is a way to visualize the distribution of a continuous variable.
+```{r}
+#| echo: true
+hist(heights$height)
+```
+
+## Stratified analysis
+-   Men tend to be taller than women for physiological reasons.
+-   This suggest that we **stratify** our data set by sex.
+-   For example, what's the mean height among men and among women?
+
+```{r}
+#| echo: true
+male.heights <- mean(heights$height[heights$sex == "Male"])
+female.heights <- mean(heights$height[heights$sex == "Female"])
+```
+
+## Accessing vector entries in R
+-  In the previous slide, I used a new technique to pick out entries in a vector.
+-  `vector[i]` returns the $i$-th entry in `vector`.
+-  If `condition` is a logical vector (i.e., a vector of `TRUE` and `FALSE` values), then `vector[condition]` returns all entries in `vector` that satisfy the condition.
+
+
+## Summarizing data
+-  Computing the mean by sex is an example of **summarizing our data**.
+-  This is so common that R has many specialized tools. 
+-  If using dplyr (part of tidyverse), we can do this:
+```{r}
+#| echo: true
+summarize(
+  group_by(heights, sex),
+  average_height = mean(height),
+)
+```
+
+## Differences in male vs. female height
+-   In a previous statistics course (e.g. STATS 250) you learned some ways to assess
+    whether two populations are different.
+-   How can we apply that here?
+
+# Next steps
+
+## Practice, practice, practice
+-  If you are new to coding, the key to getting better is **practice**. 
+-  R and tidyverse comes with lots of interesting data sets for you to practice with.
+-  Examples:
+   - `mpg` (data about car fuel efficiency)
+   - `diamonds` (data about diamond prices)
+   - `iris` (data about flower measurements)
+   - `nycflights13` (data about flights departing from NYC in 2013)
+   
+
+## Diamond prices
+`diamonds` data set contains information about a large number of diamonds, including their price, carat weight, cut quality, color, and clarity.
+
+-  How many diamonds are in the data set?
+-  What is the average price of a diamond?
+-  What is the distribution of diamond prices?
+-  How does the price of a diamond vary with its carat weight?
+
+## 🤔 Final question
+-    Suppose everyone in the class is here in this room and responded to the survey.
+-    What is my confidence interval for the average height of the class?
+
