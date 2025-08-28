@@ -27,6 +27,10 @@ library(tidyverse)
 library(dslabs)
 ```
 
+## Loading this notebook
+
+[https://ds306.org/lectures/week1/lecture2.html](https://ds306.org/lectures/week1/lecture2.html)
+
 ## Recap from Lecture 1
 Last lecture we covered:
 
