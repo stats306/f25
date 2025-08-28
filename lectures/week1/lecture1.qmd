@@ -10,6 +10,8 @@ drop:
       - tidyverse
       - dslabs
 ---
+# Lecture 1
+
 ## Administrative
 
 
@@ -354,7 +356,118 @@ summarize(
     whether two populations are different.
 -   How can we apply that here?
 
-# Next steps
+# Recap from Lecture 1
+
+## Loading data into R
+
+```{r}
+#| echo: true
+heights <- read_csv("https://ds306.org/data/survey1.csv")
+```
+
+## Working with data frames
+```{r}
+#| echo: true
+colnames(heights) <- c("timestamp", "sex", "height")  # change column names
+# ^^^ function call
+```
+
+## Working with vectors
+```{r}
+#| echo: true
+mean(heights$height)  # mean height
+heights$height[1]  # access first entry
+heights$height[heights$height > 70]  # access entries > 70
+```
+
+## Cleaning data
+We saw that the raw heights had reported heights in a variety of units:
+```{r}
+#| echo: true
+sort(heights$height)
+```
+## Cleaning data (by hand)
+-  We cleaned the data by hand using a series of rules:
+```{r}
+#| echo: true
+height <- heights$height
+height[height < 3] <- height[height < 3] * 100          # meters → cm
+height[height < 9] <- height[height < 9] * 12 * 2.54   # feet → cm
+```
+
+## Using `ifelse`
+-  In the above code, we reasoned as follows:
+   > If height < 3, then height is in meters, so convert to cm.
+   > If height < 9, then height is in feet, so convert to cm.
+   > If height < 100, then height is in inches, so convert to cm.
+  
+-  This is a common pattern in programming, and R has a function for it: `ifelse()`:
+```{r}
+#| echo: true
+my_data = c(1, 2.3, 8, -1)
+ifelse(my_data < 0, "neg", "pos")
+```
+
+
+## AI generated code
+- This is a good case for ChatGPT, **provided you carefully tell it what to do**.
+- Initial attempt:
+```{r}
+#| echo: true
+height <- heights$height
+height_cm <- case_when(
+    height < 3        ~ height * 100,        # meters → cm
+    height < 9        ~ height * 30.48,      # feet → cm
+    height < 100      ~ height * 2.54,       # inches → cm
+    height < 300      ~ height,              # already cm
+    TRUE           ~ height / 10          # assume mm → cm (e.g. 510, 511)
+)  # WRONG
+```
+
+
+## Correct(er) AI generated code
+- With more careful prompting:
+```{r}
+#| echo: true
+clean_heights <- heights |>
+  mutate(height_cm = case_when(
+    height < 1 ~ height * 100000,  # km -> cm
+    height >= 1.7 & height <= 2.0 ~ height * 100,  # meters -> cm
+    height >= 5 & height <= 7 ~ {
+      feet <- floor(height)
+      inches <- round((height - feet) * 100)  # e.g. 5.10 -> 5 feet, 10 inches
+      (feet * 12 + inches) * 2.54   # feet.inches -> cm
+    },
+    height >= 48 & height <= 90 ~ height * 2.54,   # inches -> cm
+    height >= 140 & height <= 200 ~ height,        # cm already
+    height > 500 ~ {                         # feet+inches concatenated, e.g. 510 = 5'10"
+      feet <- floor(height / 100)
+      inches <- height %% 100
+      (feet * 12 + inches) * 2.54
+    },
+    TRUE ~ NA_real_
+  ))
+```
+-  ChatGPT still made a mistake here -- can you find it?
+
+# dplyr
+
+## Data manipulation
+
+:::: {.columns}
+
+::: {.column width="60%"}
+- As a data scientist, most of your time is spent getting your data into a format that you can analyze.
+- The `dplyr` package (part of `tidyverse`) provides a set of tools for manipulating data frames. 
+  
+:::
+
+::: {.column width="40%"}
+![https://www.datanami.com/2020/07/06/data-prep-still-dominates-data-scientists-time-survey-finds/](https://www.datanami.com/wp-content/uploads/2020/07/Anaconda_1.png)
+:::
+
+::::
+
 
 ## Practice, practice, practice
 -  If you are new to coding, the key to getting better is **practice**. 

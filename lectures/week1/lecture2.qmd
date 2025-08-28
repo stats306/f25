@@ -1,0 +1,329 @@
+---
+title: "DATASCI 306 Week 1"
+format: live-revealjs
+engine: knitr
+webr:
+  packages:
+    - tidyverse
+    - dslabs
+  resources:
+    - survey1.csv
+---
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+# Lecture 2
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+library(dslabs)
+```
+```{webr}
+#| echo: false
+#| autorun: true
+library(tidyverse)
+library(dslabs)
+```
+
+## Recap from Lecture 1
+Last lecture we covered:
+
+-  Loading data into R
+-  Working with data frames
+-  Working with vectors
+-  Cleaning data
+
+## Loading data into R
+
+```{webr}
+survey1 <- read_csv("survey1.csv")
+# survey1 <- read_csv("https://ds306.org/data/survey1.csv")
+```
+
+## What's a data frame?
+
+-  Our main goal in R is to work with data, and one of the most fundamental objects in R is the *data frame*. 
+-  Think of a data frame as a container for a bunch of *vectors* of data:
+
+![dataframe](https://garrettgman.github.io/images/tidy-2.png)
+
+## Working with data frames
+
+```{webr}
+# count number of rows
+# count number of columns
+# summarize the df
+# change column names
+```
+
+## Working with vectors
+```{webr}
+# mean height
+# access first entry
+# access entries > 70
+```
+
+## Cleaning data
+We saw that the raw heights had reported heights in a variety of units:
+```{webr}
+# sorted entries of survey1$height
+```
+## Cleaning data (by hand)
+-  We cleaned the data by hand using a series of rules:
+```{webr}
+height <- survey1$height
+height[height < 3] <- height[height < 3] * 100          # meters → cm
+height[height < 9] <- height[height < 9] * 12 * 2.54   # feet → cm
+```
+
+## Using `ifelse`
+-  In the above code, we reasoned as follows:
+   > If height < 3, then height is in meters, so convert to cm.
+   > If height < 9, then height is in feet, so convert to cm.
+   > If height < 100, then height is in inches, so convert to cm.
+  
+-  This is a common pattern in programming, and R has a function for it: `ifelse()`:
+```{webr}
+my_data = c(1, 2.3, 8, -1)
+ifelse(my_data < 0, "neg", "pos")
+```
+
+## Using `case_when`
+- `ifelse()` is useful for two cases, but what if we have many cases?
+- `dplyr` provides a more general function: `case_when()`
+
+```{webr}
+my_data = c(1, 2.3, 8, -1, 0)
+ifelse(my_data < 0, "neg", ifelse(my_data == 0, "zero", "pos"))
+case_when(
+  my_data < 0 ~ "neg",
+  my_data == 0 ~ "zero",
+  TRUE ~ "pos"
+)
+```
+
+# Using AI to help clean data
+
+## Prompting matters
+- This is a good case for ChatGPT, **provided you carefully tell it what to do**.
+- Initial attempt:
+```{webr}
+height_cm <- case_when(
+    height < 3        ~ height * 100,        # meters → cm
+    height < 9        ~ height * 30.48,      # feet → cm
+    height < 100      ~ height * 2.54,       # inches → cm
+    height < 300      ~ height,              # already cm
+    TRUE           ~ height / 10          # assume mm → cm (e.g. 510, 511)
+)  # WRONG
+```
+
+
+## Correct(er) AI generated code
+- With more careful prompting:
+```{webr}
+clean_heights <- heights |>
+  mutate(height_cm = case_when(
+    height < 1 ~ height * 100000,  # km -> cm
+    height >= 1.7 & height <= 2.0 ~ height * 100,  # meters -> cm
+    height >= 5 & height <= 7 ~ {
+      feet <- floor(height)
+      inches <- round((height - feet) * 100)  # e.g. 5.10 -> 5 feet, 10 inches
+      (feet * 12 + inches) * 2.54   # feet.inches -> cm
+    },
+    height >= 48 & height <= 90 ~ height * 2.54,   # inches -> cm
+    height >= 140 & height <= 200 ~ height,        # cm already
+    height > 500 ~ {                         # feet+inches concatenated, e.g. 510 = 5'10"
+      feet <- floor(height / 100)
+      inches <- height %% 100
+      (feet * 12 + inches) * 2.54
+    },
+    TRUE ~ NA
+  ))
+```
+-  ChatGPT still made a mistake here -- can you find it?
+
+## Missing data
+- Any condition that did not match above, ChatGPT set to `NA`.
+- R has a special value, `NA` , for representing missing data. 
+- You can think of the value of `NA` as "I don't know". Thus, logical and mathematical operations involving `NA` will again return `NA`, so that `NA`s "propagate through" the computation:
+
+```{webr}
+NA + 5 # 5 + I-don't-know = I-don't-know
+1 < NA  # Is 1 less that I-don't-know? I don't know.
+NA < NA  # Is I-don't-know greater than I-don't-know? I don't know.
+mean(c(1, NA, 3), na.rm=F) # And so forth.
+```
+
+## Testing for `NA`
+
+Since you cannot test `NA`s for equality, R has a special function for determining whether a value is `NA`:
+
+```{webr}
+5 == NA
+is.na(NA)
+is.na(1)
+```
+
+# dplyr
+
+## Data manipulation
+
+:::: {.columns}
+
+::: {.column width="60%"}
+- As a data scientist, most of your time is spent getting your data into a format that you can analyze.
+- The `dplyr` package (part of `tidyverse`) provides a set of tools for manipulating data frames. 
+  
+:::
+
+::: {.column width="40%"}
+![https://www.datanami.com/2020/07/06/data-prep-still-dominates-data-scientists-time-survey-finds/](https://www.datanami.com/wp-content/uploads/2020/07/Anaconda_1.png)
+:::
+
+::::
+
+## The `dplyr` idea
+-  `dplyr` provides a set of functions that each perform a single operation on a data frame:
+  - They take as input a dataframe, plus some additional arguments
+  - The return value is a new dataframe
+-  You can chain these functions together to perform complex operations in a clear and readable way.
+-  So, **key idea**: _break complex operations into a series of simple transformations of your data_
+
+# Row operations
+
+These operations change the number or order of the rows in a data frame.
+
+## Operation #1: Filtering data
+-  The first operation we'll learn about is filtering. 
+-  Filtering is interpereted to mean "keep only the rows whose columns match these criteria". 
+-  The syntax for the `filter` command is 
+
+```{r}
+#| eval: false
+filter(<TABLE>, <LOGICAL CRITERIA>)
+```
+This commands returns a new tibble whose rows all match the specified criteria.
+
+## Filtering example
+```{webr}
+# keep all heights between 40 and 100
+```
+
+## Types of logical criteria
+- The basic logical operators in R are `>`, `>=`, `<`, `<=`, `!=` (not equal), and `==` (equal). 
+- The first four are used for comparing numbers and function exactly as in mathematics:
+```{webr}
+1 > 1
+1 >= 1
+2.5 < 3
+2.5 <= 3
+```
+
+## Assignment vs. equality
+A common mistake for beginner programmers is to confuse `=` and `==` ("double equals") when writing code:
+- `=` and `<-` are used for assigning a value to a variable
+- (`=` is also used for passing a named parameter into a function, more on this later)
+- `==` is used for testing equality
+```{webr}
+x <- 5        # assignment
+x = 5        # assignment  
+x == 5       # test for equality
+```
+
+## Operation #2: Sorting
+Often we want to sort our data based on one or more column values. This can arise for several reasons:
+- The data have some natural order (for example, chronological)
+- We want to learn about "extreme" features of the data:
+  - "What was the most delayed flight?"
+  - "What was the hottest day of the year?"
+  - "Who was the tallest NBA player in 2010?"
+  
+## Sorting with `arrange()`
+`arrange()` changes the order of the rows based on the value of the columns. 
+- It takes a data frame and a set of column names (or more complicated expressions) to order by. 
+- If you provide multiple expressions to order by, it uses the second one to break ties in the first one, third one to break ties in the second one, and so on.
+- By default, things are sorted in **ascending** order.
+
+
+```{webr}
+# sort by height, ascending
+```
+
+#  Column operations
+These operations change the number or names of the columns in a data frame.
+
+## Filtering columns: `select()`
+- `select()` can help you to narrow down a large dataset by just focusing on the variables you’re interested in. 
+
+```{webr}
+select(survey1, age, height)
+select(survey1, starts_with("h"))
+select(survey1, ends_with("t"))
+select(survey1, -timestamp)  # drop timestamp
+```
+
+## Column operation #2: `mutate()`
+
+-  `mutate()` creates new columns in a dataframe that are calculated from the existing columns.
+-  Example: converting height in inches to height in cm
+
+```{webr}
+mutate(survey1, height_cm = height * 2.54)
+```
+
+## Creating pipelines
+- Let's combined several of these operations together:
+```{webr}
+survey1_filtered <- filter(survey1, height >= 150 & height <= 200)
+survey1_sorted <- arrange(survey1_filtered, height)
+survey1_final <- select(survey1_sorted, age, height)
+survey1_final
+```
+
+## Improving readability
+- The above code creates a lot of intermediate variables and is not that readable.
+- Instead, we might try:
+```{webr}
+survey1_final <- select(
+  arrange(
+    filter(survey1, between(height, 150, 200)),
+    height
+  ),
+  age, height
+)
+```
+- This is better, but still hard to read (requires us to read inside-out)
+
+## The pipe operator: `%>%` or `|>`
+- R provides a special operator, the pipe operator, that makes this kind of code easier to read.
+- The pipe operator is written as `%>%` (in `dplyr`) or `|>` (base R).
+- The pipe operator takes the output of the expression on the left and "pipes" it as the first argument to the function on the right:
+```{r}
+#| eval: false
+x |> f(y)  # is equivalent to f(x, y)
+x %>% f(y)  # is equivalent to f(x, y)
+```
+
+## Rewriting our pipeline
+```{webr}
+survey1_final <- survey1 |>
+  filter(between(height, 150, 200)) |>
+  arrange(height) |>
+  select(age, height)
+```
+
+
+## Quiz: diamond prices
+`diamonds` data set contains information about a large number of diamonds, including their price, carat weight, cut quality, color, and clarity.
+
+-  How many diamonds are in the data set?
+-  What is the average price of a diamond?
+-  What is the distribution of diamond prices?
+-  How does the price of a diamond vary with its carat weight?
+
+## 🤔 Final question
+-    Suppose everyone in the class is here in this room and responded to the survey.
+-    What is my confidence interval for the average height of the class?
+
