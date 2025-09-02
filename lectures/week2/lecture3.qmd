@@ -1,0 +1,280 @@
+---
+title: "DATASCI 306"
+subtitle: "Lecture 3"
+format: live-revealjs
+engine: knitr
+webr:
+  packages:
+    - tidyverse
+    - dslabs
+  resources:
+    - survey1.csv
+---
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+## Loading this notebook
+
+```{=html}
+<style>
+.qrcode img {
+  margin: 20px auto;
+}
+</style>
+```
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+library(dslabs)
+```
+```{webr}
+#| echo: false
+#| message: false
+#| warning: false
+#| autorun: true
+library(tidyverse)
+library(dslabs)
+set.seed(1)
+survey1 <- read_csv("survey1.csv")
+```
+
+[https://ds306.org/lectures/week2/lecture3.html](https://ds306.org/lectures/week2/lecture3.html)
+
+## Recap from Lecture 2
+
+Last lecture we covered:
+
+-  Basic dpylr operations: `filter()`, `arrange()`, `select()`, `mutate()`
+-  The pipe operator: `%>%` or `|>`
+
+
+## Common mistake on quiz
+`mean(df)` vs. `mean(df$column_name)`
+```{webr}
+mean(diamonds)
+```
+
+
+## Lecture 3
+
+Today's lecture will cover:
+
+-  Writing a function
+-  More practice with `dplyr`
+-  Working with tabular data
+-  Hypothesis testing
+
+
+## Loading data into R
+
+```{webr}
+# download.file("https://websites.umich.edu/~jonth/stats306/datasets/survey1.csv", "survey1.csv")
+survey1 <- read_csv("survey1.csv")
+```
+
+## Cleaning up the height data
+From ChatGPT:
+```{r}
+#| eval: false
+#| echo: true
+height_cm <- case_when(
+  raw < 1 ~ raw * 100000,                    # kilometers → cm
+  raw >= 1.7 & raw < 2.1 ~ raw * 100,        # meters → cm
+  raw > 100 & raw < 250 ~ raw,               # centimeters (already cm)
+  raw >= 48 & raw <= 90 ~ raw * 2.54,        # inches → cm
+  raw > 400 & raw < 800 ~ {
+    feet <- floor(raw / 100)
+    inches <- raw %% 100
+    (feet * 12 + inches) * 2.54              # feet+inches concatenated → cm
+  },
+  raw >= 4 & raw <= 8 ~ {
+    feet <- floor(raw)
+    inches <- (raw - feet) * 100
+    (feet * 12 + inches) * 2.54              # feet.inches decimal → cm
+  },
+  TRUE ~ NA
+)
+```
+
+## Converting "decimal feet"
+-  Some people reported their heights in the format "5.8" (5 feet 8 inches), or 
+"5.11" (5 feet 11 inches), or "6.0" (6 feet 0 inches).
+-  ChatGPT suggested the following code to convert these to cm:
+```{r}
+#| eval: false
+#| echo: true
+feet <- floor(height)
+inches <- (height - feet) * 100
+(feet * 12 + inches) * 2.54              # feet.inches decimal → cm
+```
+
+## Functions in R
+-  To define a function in R, we use the syntax:
+```{r eval=F, echo=T}
+my_function <- function(arg1, arg2, ...) {
+  # code that does something with arg1, arg2, ...
+  return(some_value)  # return() is optional
+}
+```
+-  The function can then be called with:
+```{r eval=F, echo=T}
+my_function(value1, value2, ...)
+```
+## R functions vs. other languages
+-  `return()` is optional. R will return the last evaluated expression.
+-  Functions are just variables: `function_name <- function(...) { ... }`
+-  R functions can return multiple values using a vector or list.
+
+## Function to convert "decimal feet" to cm
+- Let's try running this code with a few different values of `height`.
+- To conveniently do this, we can define a _function_:
+```{webr}
+unpack_dft <- function(height) {
+  # "decimal feet" -> cm
+  feet <- floor(height)
+  inches <- (height - feet) * 100
+  c(feet, inches)  # return both feet and inches
+}
+```
+
+## Calling a function
+- Now we can easily test this function with different values of `height`:
+```{webr}
+unpack_dft(5.8)
+unpack_dft(5.11)
+unpack_dft(6.0)
+```
+
+## Function to convert "decimal feet" to cm
+```{webr}
+dft_to_cm <- function(height) {
+  parts <- unpack_dft(height)
+  feet <- parts[1]
+  inches <- parts[2]
+  (feet * 12 + inches) * 2.54              # feet.inches decimal → cm
+}
+```
+
+## Using our function in `mutate()`
+```{webr}
+raw_height_to_cm <- function(raw) {
+  case_when(
+    raw < 1 ~ raw * 100000,                   # kilometers → cm
+    raw >= 1.7 & raw < 2.1 ~ raw * 100,       # meters → cm
+    raw > 100 & raw < 250 ~ raw,              # centimeters (already cm)
+    raw >= 48 & raw <= 90 ~ raw * 2.54,       # inches → cm
+    raw > 400 & raw < 800 ~ dft_to_cm(raw / 100),   # feet+inches → cm
+    raw >= 4 & raw <= 8 ~ dft_to_cm(raw),           # feet.inches decimal → cm
+    TRUE ~ NA_real_
+  )
+```
+
+## Rewriting our pipeline
+```{webr}
+survey1_final <- survey1 |>
+  rename(timestamp=1, sex=2, height=3) |> 
+  mutate(height_cm = raw_height_to_cm(height)) |> 
+  arrange(height_cm) |> 
+  select(sex, height_cm)
+glimpse(survey1_final)
+```
+
+# Hypothesis testing
+
+## Testing for difference in means
+-  In STATS 250 you learned how to test hypotheses about population means.
+-  We will now learn how to do this in R.
+-  We will use the `t.test()` function to test hypotheses about means.
+
+## Example data
+```{webr}
+x1 <- rnorm(100, mean=0, sd=1)
+x2 <- rnorm(100, mean=1, sd=1)
+```
+- Are the means of `x1` and `x2` different?
+
+## `t.test()`
+```{webr}
+t.test(x1, x2)
+t.test(x1, x2, var.equal=TRUE)  # assume equal variances
+```
+**No need** to manually calculate the t-statistic or null distribution -- you've graduated past that.
+
+## Example: testing average height
+Are the male and female heights in the class equal?
+```{webr}
+male.heights <- NA
+female.heights <- NA
+# perform test
+```
+
+## 💡 Connection to regression
+- You also learned how to estimate a linear regression model in STATS 250.
+- A t-test is equivalent to a regression with a binary predictor:
+
+$$\texttt{height} = \alpha + \beta \times \texttt{is_male} + \epsilon$$
+
+```{webr}
+lm(height_cm ~ sex, survey1_final) |> summary()
+```
+
+## Testing for differences in proportions
+-  We can also use R to test hypotheses about proportions.
+-  We will use the `prop.test()` function to test hypotheses about proportions.
+
+## Example data
+Simulating a coin toss:
+```{webr}
+x <- rbinom(100, 1, 0.5)  # 100 tosses of a fair coin
+```
+
+## Testing a table
+- `prop.test()` will also take a table as input:
+```{webr}
+prop.test(table(x))
+```
+- This is easier/less error prone.
+
+## Gender ratio in this class?
+- What is the ratio of male:female students in this class?
+$$
+H_0: \text{Ratio} = 1:1 \\
+H_a: \text{Ratio} \neq 1:1
+$$
+```{webr}
+# perform test for sex
+```
+
+## A second data set
+
+<https://ds306.org/survey2>
+
+{{< qrcode https://ds306.org/survey2 width=300 height=300 >}}
+
+## Bivariate tests
+- We can also test for independence between two categorical variables.
+```{webr}
+# simulate data
+x <- sample(c("A", "B"), 100, replace=TRUE)
+y <- sample(c("C", "D"), 100, replace=TRUE)
+tab <- table(x, y)
+tab
+```
+
+## Testing for independence
+```{webr}
+chisq.test(tab)
+```
+
+## Load survey 2
+```{webr}
+download.file("https://websites.umich.edu/~jonth/stats306/datasets/survey2.csv")
+survey2 <- read_csv("survey2.csv")
+```
+
+## Testing for independence
+```{webr}
+# to be filled in in lecture
+```
