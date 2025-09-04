@@ -71,9 +71,18 @@ survey2_final <-  read_csv("survey2.csv") |>
 - We've now collected self-reported heights from students in the class, and 
   also heights as reported to another person sitting next to you.
 - Are these two measurements the same?
+```{webr}
+t.test(survey1_final$height_cm, survey2_final$height_cm)
+```
 
-##  Summarizing data
-- First let's look at the mean height in each data set.
+## Distribution of heights
+- Let's check the distribution of heights between the two surveys:
+```{webr}
+hist(survey1_final$height_cm)
+```
+
+#  Summarizing data
+- Let's extract the mean heights using dplyr:
 - We will use a new `dplyr` function: `summarise()`:
 ```{webr}
 survey2_final |> summarise(mean_height = mean(height_cm, na.rm=T))
@@ -95,8 +104,8 @@ survey2_final |>
   summarise(mean_height = mean(height_cm, na.rm=T))
 ```
 
-## Difference is mean height
-- Are the means different from each other? To study that we need to know more
+## Height differences
+Are the means different from each other? To study that we need to know more
 about the variation in mean height.
 ```{webr}
 survey2_final |> 
@@ -233,7 +242,7 @@ flights |>
   summarise(num_cancelled = sum(is.na(dep_time)), .groups = "drop")
 ```
 
-# Pivoting data
+# Tidy data and pivoting
 Suppose we want to look at the number of flights per month from each airport:
 ```{webr}
 flights |> count(month, origin)
