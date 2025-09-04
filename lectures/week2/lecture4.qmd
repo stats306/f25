@@ -1,0 +1,262 @@
+---
+title: "DATASCI 306"
+subtitle: "Lecture 4"
+format: live-revealjs
+engine: knitr
+webr:
+  packages:
+    - tidyverse
+    - dslabs
+    - nycflights13
+  resources:
+    - surveys.RData
+    - survey2.csv
+---
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+## Loading this notebook
+
+```{=html}
+<style>
+.qrcode img {
+  margin: 20px auto;
+}
+</style>
+```
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+library(dslabs)
+library(nycflights13)
+```
+```{webr}
+#| echo: false
+#| message: false
+#| warning: false
+#| autorun: true
+library(tidyverse)
+library(nycflights13)
+library(dslabs)
+set.seed(1)
+load("surveys.RData")
+```
+
+[https://ds306.org/lectures/week2/lecture4.html](https://ds306.org/lectures/week2/lecture4.html)
+
+## Recap from Lecture 3
+
+Last lecture we covered:
+
+- Basic dpylr operations: `filter()`, `arrange()`, `select()`, `mutate()`
+- Writing a function
+- Hypothesis testing
+
+## This lecture
+
+- Summarizing data using `group_by()` and `summarise()`
+- Introduction to relational data
+
+# Survey 2
+```{webr}
+survey2_final <-  read_csv("survey2.csv") |> 
+  select(timestamp=1, sex=2, height=3, units=4, food=5, continent=6, umid=7) |> 
+  mutate(umid=as.integer(umid), 
+         height_cm=ifelse(units=="Inches", height*2.54, height))
+```
+
+## Heights data
+- We've now collected self-reported heights from students in the class, and 
+  also heights as reported to another person sitting next to you.
+- Are these two measurements the same?
+
+##  Summarizing data
+- First let's look at the mean height in each data set.
+- We will use a new `dplyr` function: `summarise()`:
+```{webr}
+survey2_final |> summarise(mean_height = mean(height_cm, na.rm=T))
+```
+
+## `group_by()`
+- `group_by()` takes one or more variables and creates groups based on unique combinations of those variables.
+- The output of `group_by()` is a special type of data frame that keeps track of the groups -- it doesn't change the
+  data frame in any other way.
+
+```{webr}
+survey2_final |> group_by(food)
+```
+
+## Example: mean height by continent of birth
+```{webr}
+survey2_final |> 
+  group_by(sex, birth) |> 
+  summarise(mean_height = mean(height_cm, na.rm=T))
+```
+
+## Difference is mean height
+- Are the means different from each other? To study that we need to know more
+about the variation in mean height.
+```{webr}
+survey2_final |> 
+  group_by(sex, birth) |> 
+  summarise(mean_height = mean(height_cm, na.rm=T), 
+            sd = sd(height_cm, na.rm=T),
+            n = n())
+```
+
+## Are burrito-eaters taller?
+```{webr}
+survey2_final |> 
+  group_by(eat) |> 
+  summarise(mean_height = mean(height_cm, na.rm=T), 
+            sd = sd(height_cm, na.rm=T),
+            n = n()) |> 
+  mutate(sem = sd / sqrt(n),
+         lower = mean_height - 2*sem,
+         upper = mean_height + 2*sem)
+```
+
+## Is UMID associated with anything?
+```{webr}
+survey2_final |> select(umid, food) |> table() |> chisq.test()
+```
+
+## Is UMID uniform?
+```{webr}
+table(survey2_final$umid) |> chisq.test()
+```
+
+# Flights data
+
+The `nycflights13` package contains data on all flights that departed from NYC in 2013.
+
+```{webr}
+library(nycflights13)
+flights
+```
+
+# Six questions
+1. Which airport is the busiest?
+2. Which month is the busiest?
+3. What are the top five busiest days?
+4. Which carriers have the highest delays?
+5. Do more people fly south in the winter?
+6. How does weather affect flight cancellations?
+
+## Which airport is the busiest?
+
+```{webr}
+flights |> 
+  group_by(origin) |> 
+  summarise(num_flights = n()) |> 
+  arrange(desc(num_flights))
+```
+
+## Using `count()`
+The `count()` function is a shortcut for `group_by()` followed by `summarise(n = n())`.
+```{webr}
+flights |> count(origin)
+```
+
+## Which month is the busiest?
+```{webr}
+flights |> count(month) |> arrange(desc(n))
+```
+
+## What are the top five busiest days?
+```{r}
+flights |> count(year, month, day) |> arrange(desc(n))
+```
+
+## Using `top_n()`
+Because there are many days with the same number of flights, we can use `top_n()` to get the top five.
+```{r}
+flights |> count(year, month, day) |> top_n(5, n)
+```
+## What are the least busiest days?
+```{webr}
+flights |> count(year, month, day) |> top_n(5, -n)
+```
+
+## Which carriers have the highest delays?
+```{r}
+flights |> 
+  group_by(carrier) |> 
+  summarise(avg_delay = mean(arr_delay, na.rm=TRUE)) |> 
+  arrange(desc(avg_delay))
+```
+## Relational data
+In the `nycflights13` package, there are five related data frames:
+![https://r4ds.hadley.nz/diagrams/relational.png](https://r4ds.hadley.nz/diagrams/relational.png)
+
+## `airlines` table
+To actually understand what these carrier codes are, we need to look at the `airlines` data frame.
+```{webr}
+airlines
+```
+
+## Joining tables
+- Instead of matching up each code manually, we can use a **table join** to do it for us.
+- A table join matches up rows in two tables based on common variable(s).
+- They variables are collectively called a *key*.
+
+## `left_join()`
+The most common type of join is a *left join*.
+```{webr}
+flights |> 
+  group_by(carrier) |> 
+  summarise(avg_delay = mean(arr_delay, na.rm=TRUE)) |> 
+  left_join(airlines, by="carrier") |> 
+  arrange(desc(avg_delay))
+```
+
+## Do more people fly south in the winter?
+```{webr}
+flights |> 
+  left_join(airports, by=c("dest"="faa")) |> 
+  group_by(month) |> 
+  summarize(mean_lat = mean(abs(lat), na.rm=TRUE))
+```
+
+## How does weather affect flight cancellations?
+How is a cancelled flight represented?
+```{webr}
+flights |> filter(is.na(dep_time))
+```
+
+## Relationship between weather and flight cancellation
+```{webr}
+flights |> 
+  group_by(year, month, day, origin) |> 
+  summarise(num_cancelled = sum(is.na(dep_time)), .groups = "drop")
+```
+
+# Pivoting data
+Suppose we want to look at the number of flights per month from each airport:
+```{webr}
+flights |> count(month, origin)
+```
+
+## `pivot_wider()`
+A better way to see this data is to "pivot" it so that each airport is a column:
+```{webr}
+flights |> count(month, origin) |> 
+  pivot_wider(names_from = origin, values_from = n)
+```
+
+## Tidy data
+- The wider data frame is somehow different from other data tables that we have
+  looked at. (Why?)
+- Data frames that have one row per observation and one column per variable are called [tidy data](https://r4ds.hadley.nz/data-tidy.html#sec-tidy-data).
+- The original data frame is tidy, but the pivoted data frame is not.
+- `tidyverse` libraries expect tidy data as input, and generally return tidy data as output. (Whence the name.)
+
+## `pivot_longer()`
+To go back to the original format, we can use `pivot_longer()`:
+```{webr}
+flights |> count(month, origin) |> 
+  pivot_wider(names_from = origin, values_from = n) |> 
+  pivot_longer(cols = c(EWR, JFK, LGA), names_to = "origin", values_to = "n")
+```
