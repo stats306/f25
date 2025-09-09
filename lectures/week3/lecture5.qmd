@@ -1,0 +1,296 @@
+---
+title: "DATASCI 306"
+subtitle: "Lecture 5"
+format: live-revealjs
+engine: knitr
+webr:
+  packages:
+    - tidyverse
+    - dslabs
+    - nycflights13
+  resources:
+    - spotify_mpd_001.RData
+    - hot100_2017.RData
+---
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+## Loading this notebook
+
+```{=html}
+<style>
+.qrcode img {
+  margin: 20px auto;
+}
+</style>
+```
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+library(dslabs)
+library(nycflights13)
+load("spotify_mpd_001.RData")
+load("hot100_2017.RData")
+```
+```{webr}
+#| echo: false
+#| message: false
+#| warning: false
+#| autorun: true
+library(tidyverse)
+library(nycflights13)
+library(dslabs)
+set.seed(1)
+load("spotify_mpd_001.RData")
+load("hot100_2017.RData")
+```
+
+[https://ds306.org/lectures/week3/lecture5.html](https://ds306.org/lectures/week3/lecture5.html)
+
+## Recap from Lecture 4
+
+- Summarizing data using `group_by()` and `summarise()`
+- Introduction to relational data
+
+## This lecture
+
+- More practice with relational databases
+- Concepts of tidy data and pivoting
+- Working with dates and times
+- Beginning ggplot
+
+# Spotify data
+```{webr}
+load("spotify_mpd_001.RData")
+```
+This is a relational database with six tables: `artist`, `album`, `track`, `playlist`, `playlist_track`, and `track_attr`.
+
+## Playlist
+```{webr}
+playlist
+```
+- The `playlist` table contains information about playlists.
+- There are 1 million of them in the dataset; I randomly sampled 0.1% = 1000 of them
+  for lecture.
+- All the other data is pulled in based on the playlists.
+
+## Track
+- Information about different tracks
+```{webr}
+track
+```
+
+## Track attributes
+- The `track_attr` table contains information about the audio features of each track.
+- These are computed by Spotify using signal processing and machine learning.
+```{webr}
+track_attr
+```
+
+## Playlists and tracks
+- Each playlist contains multiple tracks.
+- The `playlist_track` table contains the mapping between playlists and tracks.
+```{webr}
+playlist_track
+```
+
+# Some basic questions
+## How many playlists are there?
+```{webr}
+nrow(playlist)
+```
+## How many tracks are there?
+```{webr}
+nrow(track)
+```
+## How many songs does each playlist have?
+```{webr}
+playlist_track |> count(playlist_id) |> head()
+```
+## How many playlists does each song appear in?
+```{webr}
+playlist_track |> count(track_id) |> head()
+```
+## When are playlists created?
+```{webr}
+playlist |> count(as.Date(modified_at)) |> arrange(modified_at)
+```
+
+# Problem solving strategies
+- In OH I got the question: how do I figure out what commands to use to answer a question?
+- My advice: 
+  1. Break the problem down into smaller pieces; and
+  2. Work backwards.
+  3. (Use ChatGPT -- but be careful)
+
+## Example: average tempo  
+- Suppose we want to find the danciest playlists. 
+- "Average tempo of each playlist".
+- So I need a table that looks like:
+```{r}
+#| echo: false
+#| message: false
+playlist_track |> left_join(track_attr, by = "track_id") |>
+  group_by(playlist_id) |>
+  summarise(avg_tempo = mean(tempo, na.rm = TRUE)) |>
+  arrange(desc(avg_tempo)) |>
+  left_join(playlist, by = c("playlist_id" = "id")) |>
+  select(pid, name, avg_tempo)
+```
+
+## Step $n-1$
+To get to this table, I need to run something like:
+
+```{r}
+#| eval: false
+#| echo: true
+mystery_tbl |> 
+  group_by(playlist_id) |> 
+  summarise(avg_tempo = mean(tempo, na.rm = TRUE))
+```
+
+What should `mystery_tbl` look like?
+
+## Step $n-2$
+```{r}
+#| eval: true
+#| echo: false
+#| message: false
+#| warning: false
+playlist |> 
+  left_join(playlist_track, by = c("id" = "playlist_id")) |>
+  left_join(track_attr, by = "track_id") |> 
+  select(pid, track_id, track_name, tempo) -> mystery_tbl
+```
+```{r}
+#| eval: true
+#| echo: true
+mystery_tbl
+```
+## Step $n-3$
+To get to this table, I need to run something like:
+```{r}
+#| eval: false
+#| echo: true
+some_tbl |> left_join(track_attr, by = "track_id") |> select(pid, track_id, track_name, tempo)
+```
+What is `some_tbl`?
+
+## Solution
+```{webr}
+some_tbl <- playlist_track |> 
+  left_join(track_attr, by = "track_id") |> 
+  select(pid, track_id, track_name, tempo)
+```
+
+
+# What are the most popular songs?
+- Two ways to measure:
+  - Popularity score (0-100) assigned by Spotify
+  - Number of playlists that contain the song
+
+## Number of playlists
+```{webr}
+playlist_track |> count(track_id) |> 
+  left_join(track, by = c("track_id" = "id")) |>
+  arrange(desc(n)) |>
+  head()
+```
+# Song popularity over time
+- Let's use the spotify data to look at how the popularity of songs has changed over time.
+- How to measure popularity? 
+
+## Number of playlists per week
+- One way is to look at the number of playlists that contain a song.
+- Each playlist has a timestamp, which we can convert to a week.
+```{webr}
+playlist$modified_at |> head()
+```
+
+## Converting a date to another format
+```{webr}
+playlist$modified_at |> head() |> lubridate::week()
+```
+Working with dates and times is notoriously difficult, so it's good to use a package like `lubridate` 
+that handles the details for you.
+
+## Counting the number of times a song appears in playlists each week
+```{webr}
+playlist_track |> 
+  left_join(playlist, by = c("playlist_id" = "id")) |> 
+  mutate(year = lubridate::year(modified_at), week = lubridate::week(modified_at)) |> 
+  count(track_id, year, week) |>
+  left_join(track, by = c("track_id" = "id")) |>
+  arrange(desc(n))
+```
+
+
+
+# Song charts
+The `hot100_2017` data frame contains information about the Billboard top 100 songs for each week in 2015.
+```{webr}
+load("hot100_2017.RData")
+hot100_2017
+```
+
+## Tidy data
+- Wide data is somehow different from other data tables that we have
+  looked at. (Why?)
+- Data frames that have one row per observation and one column per variable are called [tidy data](https://r4ds.hadley.nz/data-tidy.html#sec-tidy-data).
+- Up to now we have mostly worked with (preprocessed) tidy data.
+- `tidyverse` libraries expect tidy data as input, and generally return tidy data as output. (Whence the name.)
+
+## Tidy data and pivoting
+- Suppose we want to figure out the average "lifespan" of a song in the top 100. 
+- How can we do it with the `hot100_2017` data frame?
+- We need to "pivot" the data so that each row is a song-week combination:
+```{r}
+#| echo: false
+#| eval: true
+hot100_2017 |> 
+  pivot_longer(cols = starts_with("w"), 
+               names_prefix="w", 
+               names_to = "week", 
+               values_to = "rank")
+```
+
+## Pivoting
+```{webr}
+hot100_long <- 
+  hot100_2017 |> 
+  pivot_longer(cols = starts_with("w"), 
+               names_prefix="w", 
+               names_to = "week", 
+               values_to = "rank") |> 
+  mutate(week = as.integer(week))
+```
+I have a hard time remembering the syntax for `pivot_longer()` and `pivot_wider()`, but ChatGPT is good at it.
+
+## Lifespans
+Now we can compute the lifespan of each song:
+```{webr}
+hot100_long |> ggplot() + 
+  geom_line(aes(x = week, y = rank, group = Song), alpha = 0.5) + 
+  scale_y_reverse()
+```
+
+## `pivot_longer()`
+The inverse of `pivot_longer()` is `pivot_wider()`, which takes multiple columns and collapses them into key-value pairs.
+```{webr}
+flights |> count(month, origin) |> 
+  pivot_wider(names_from = origin, values_from = n) |> 
+  pivot_longer(cols = c(EWR, JFK, LGA), names_to = "origin", values_to = "n")
+```
+
+
+## Song popularity: Spotify vs. Billboard
+- How well does Spotify popularity predict Billboard rank?
+```{webr}
+hot100_long |> 
+  left_join(track_attr, by = c("Song" = "track_name")) |> 
+  ggplot(aes(x = popularity, y = rank)) + 
+  geom_point() + 
+  scale_y_reverse()
+```
