@@ -1,0 +1,256 @@
+---
+title: "DATASCI 306"
+subtitle: "Lecture 6"
+format: live-revealjs
+engine: knitr
+webr:
+  packages:
+    - tidyverse
+    - nycflights13
+    - sqldf
+  resources:
+    - spotify_mpd_001.RData
+    - hot100_2017.RData
+---
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+## Loading this notebook
+
+```{=html}
+<style>
+.qrcode img {
+  margin: 20px auto;
+}
+</style>
+```
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+library(dslabs)
+library(nycflights13)
+load("spotify_mpd_01.RData")
+load("hot100_2017.RData")
+```
+```{webr}
+#| echo: false
+#| message: false
+#| warning: false
+#| autorun: true
+library(tidyverse)
+library(nycflights13)
+library(dslabs)
+set.seed(1)
+load("spotify_mpd_001.RData")
+load("hot100_2017.RData")
+theme_set(theme_classic())
+```
+
+[https://ds306.org/lectures/week3/lecture6.html](https://ds306.org/lectures/week3/lecture6.html)
+
+## Recap from Lecture 5
+
+- More practice with relational databases
+- Concepts of tidy data and pivoting
+- Working with dates and times
+- Beginning ggplot
+
+## This lecture
+
+- *Even more* practice with dplyr and relational data
+- Beginning plots with ggplot
+
+# Music data
+```{webr}
+load("spotify_mpd_01.RData")
+load("hot100_2017.RData")
+```
+- Spotify: (working) relational database with six tables: `artist`, `album`, `track`, `playlist`, `playlist_track`, and `track_attr`.
+- Hot100: Billboard top 100 songs for each week in 2017.
+
+# Are playlists more likely to be created on weekends?
+```{webr}
+playlist_wdays <- playlist |> 
+  mutate(wday = lubridate::wday(modified_at, label = TRUE)) |> 
+  count(wday) |> print
+```
+
+## Significance test
+```{webr}
+playlist_wdays |> table() |> chisq.test()
+```
+
+# Which artists appear on the most playlists?
+```{webr}
+playlist_track |> 
+  left_join(track, by = c("track_id" = "id")) |> 
+  left_join(artist, by = c("artist_id" = "id")) |> 
+  count(name, sort = TRUE) |> head()
+```
+
+# Which _pairs_ of artists co-appear on the most playlists?
+We want a table that looks like:
+```{r}
+#| echo: false
+#| eval: true
+tibble(playlist_id = c(1, 2, 3),
+  artist1 = c("Eminem", "Beyoncé", "Eminem"),
+  artist2 = c("Rihanna", "Jay-Z", "Dr. Dre")
+)
+```
+## `combn()`
+The `combn(x, m)` function generates all combinations of `m` elements from the vector `x`.
+```{webr}
+combn(c("Eminem", "Rihanna", "Dr. Dre"), 2)
+```
+## `unnest()`
+The `unnest()` function takes a list-column and creates a new row for each element of the list.
+```{webr}
+tibble(playlist_id=1:3, pairs = combn(c("Eminem", "Rihanna", "Dr. Dre"), 2, simplify=F)) |> unnest(pairs)
+```
+## Solution: step 1
+Build a table that has playlists and artist names together:
+```{webr}
+df1 <- playlist_track |> 
+  left_join(track, by = c("track_id" = "id")) |> 
+  left_join(artist, by = c("artist_id" = "id")) |> 
+  select(playlist_id, artist_id, name) |> print()
+```
+## Step 2: find all pairs of artists on each playlist
+```{webr}
+df2 <- df1 |>
+  distinct() |>
+  arrange(playlist_id, name) |> 
+  group_by(playlist_id) |> 
+  summarise(artists = combn(name, 2, simplify = F)) |> 
+  unnest(artists)
+```
+
+## Step 3: count the pairs
+```{webr}
+df3 <- df2
+  ungroup() |>
+  count(pairs, sort = TRUE)
+```
+# Which artist had the most top 100 hits in 2017?
+This does not quite work: (why?)
+```{webr}
+hot100_2017_long |> count(Song, Artist)
+```
+
+## Step 1: dealing with multiple artists: `str_split`
+```{webr}
+str_split("Beyoncé & Jay-Z", " & ")
+str_split("Beyoncé Featuring Jay-Z", " Featuring ", simplify = TRUE)
+```
+
+## Step 2: `unnest()` into multiple columns and count
+`unnest()` will create a new row for each element of a list-column.
+```{webr}
+hot100_2017_long |> 
+  mutate(artists = str_split(Artist, " (&|Featuring|x) ")) |>
+  unnest(artists) |>
+  count(artists, sort = TRUE)
+```
+
+# Holiday songs in the top 100?
+```{webr}
+hot100_2017 |> filter(str_detect(Song, "Christmas")) |> select(w1:w3, w50:w52)
+```
+
+## Can we find other songs that chart during the holidays only?
+I'm envisioning a table that looks like:
+```{r}
+#| echo: false
+#| eval: true
+slice(hot100_2017, 1:2) |> 
+  select(Artist, Song) |> 
+  mutate(holiday_wks=c(5, 3), non_holiday_wks=c(0, 10))
+```
+## Step 1: compute holiday weeks
+```{webr}
+df1 <- hot100_2017_long |> 
+  mutate(holiday = week >= 50 | week <= 2) |>
+  count(Artist, Song, holiday)
+```
+
+## Step 2: pivot the data
+```{webr}
+df2 <- df1 |> 
+  pivot_wider(names_from = holiday, values_from = 
+                n, names_prefix="holiday_", values_fill = 0L) |>
+  print()
+```
+
+## Step 3: filter
+```{webr}
+filter(df2, holiday_FALSE == 0, holiday_TRUE > 0)
+```
+
+# What is the typical lifespan of a top 100 song?
+From last lecture:
+```{webr}
+hot100_2017_long |> 
+  ggplot(aes(x = week, y = rank, group = Song)) +
+  geom_line()
+```
+How can we improve this plot?
+
+## Idea 1: align all the lines to $x=0$
+Is this plot free of errors?
+```{webr}
+hot100_2017_long |> 
+  group_by(Song) |> 
+  mutate(week0 = week - min(week)) |>
+  ungroup() |>
+  ggplot(aes(x = week0, y = rank, group = Song)) +
+  geom_line()
+```
+
+## Fixing the bugs
+```{webr}
+hot100_2017_long |> 
+  group_by(Artist, Song) |> 
+  mutate(week0 = week - min(week)) |>
+  ungroup() |>
+  ggplot(aes(x = week0, y = rank, group = interaction(Artist, Song))) +
+  geom_line() +
+  scale_y_reverse()
+```
+
+## More bug fixing
+```{webr}
+hot100_2017_long |> 
+  group_by(Artist, Song) |> 
+  mutate(week0 = week - min(week)) |>
+  filter(week0 > 50, rank < 25)
+```
+
+## Implicit vs. explicit missing data
+- Two types of missing data:
+  - implicit: missing data are not present in the data frame.
+  - explicit: missing data are marked by `NA`s.
+- To make the plot work, we need to make the implicit `NA`s explicit using
+the `complete()` function.
+
+```{webr}
+hot100_2017_long_exna <- hot100_2017_long |> 
+  group_by(Artist, Song) |> 
+  mutate(week0 = week - min(week)) |>
+  ungroup() |>
+  complete(week0, nesting(Artist, Song))
+```
+
+
+## Final plot
+```{webr}
+hot100_2017_long_exna |> 
+  ungroup() |>
+  ggplot(aes(x = week0, y = rank, group = interaction(Artist, Song))) +
+  geom_line(alpha = 0.1) +
+  scale_y_reverse() +
+  xlab("Weeks since first appearance") +
+  ylab("Rank (1 = top)")
+```
