@@ -1,0 +1,331 @@
+---
+title: "DATASCI 306"
+subtitle: "Lecture 7"
+format: live-revealjs
+engine: knitr
+webr:
+  packages:
+    - tidyverse
+    - nycflights13
+    - sqldf
+  resources:
+    - job_postings.RData
+---
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+load("job_postings.RData")
+```
+```{webr}
+#| echo: false
+#| message: false
+#| warning: false
+#| autorun: true
+library(tidyverse)
+load("job_postings.RData")
+```
+
+[https://ds306.org/lectures/week4/lecture7.html](https://ds306.org/lectures/week4/lecture7.html)
+
+## Recap from Lecture 6
+- Practice with dplyr and relational data
+- Beginning plots with ggplot
+
+# Questions for the next 3 lectures
+
+- What is the job market like right now?
+- Where is it headed in the near future?
+- How is AI reshaping the job market? 
+
+## Today's lecture
+- Explore a new dataset on job postings.
+- See examples of good and bad plots.
+- Learn how to make great plots.
+
+# Job market data
+```{webr}
+load("job_postings.RData")
+job_postings
+```
+
+## What is exploratory data analysis
+
+<img src="https://upload.wikimedia.org/wikipedia/en/e/e9/John_Tukey.jpg" style="margin: 0 0 0 20px; float: right" />
+
+> Procedures for analyzing data, techniques for interpreting the results of such procedures, ways of planning the gathering of data to make its analysis easier, more precise or more accurate, and all the machinery and results of (mathematical) statistics which apply to analyzing data.
+
+- John Tukey
+
+## Goals of EDA
+Two types of questions are always useful for making discoveries within your data:
+
+- What type of variation occurs within my variables?
+- What type of covariation occurs between my variables?
+
+## Basic rules for making good plots
+1. Label the axes.
+2. Include units.
+3. Explain anything that is "encoded" (color scales, size variation, etc.)
+4. Use appropriate geometry.
+5. Include sources/attribution.
+6. Use the simplest possible design necessary to convey the information.
+
+## One continuous variable: histogram
+A histogram visualizes the variation within a single continuous variable.
+```{webr}
+#| warning: false
+job_postings |>
+  ggplot(aes(normalized_salary)) +
+  geom_histogram(binwidth = 10000, color = "black", fill = "lightblue") +
+  labs(
+    title = "Distribution of Salaries in Job Postings",
+    x = "Salary ($)",
+    y = "Number of Postings"
+  ) +
+  xlim(0, 250000)
+```
+
+## Two continuous variables: scatterplot
+A scatterplot visualizes the covariation between *two* continuous variables.
+```{webr}
+job_postings %>%
+  ggplot(aes(x=normalized_salary, y=views)) +
+  geom_point(alpha = 0.5) +
+  labs(
+    title = "Salary vs. View count in Job Postings",
+    x = "Salary ($)",
+    y = "Views (clicks)"
+  ) 
+```
+
+## Choosing the right coordinates
+The default coordinate system is Cartesian (x-y axes at right angles) and spans
+  the entire range of the data, but this doesn't always make sense.
+```{r}
+diamonds |> 
+  ggplot(aes(x=carat, y=price)) +
+  geom_point(alpha = 0.5) +
+  labs(
+    title = "Price vs. Carat in Diamonds",
+    x = "Carat",
+    y = "Price ($)"
+  )
+```
+
+## One discrete variable: bar plot
+A bar plot visualizes the variation within a single discrete variable.
+
+```{webr}
+jp_state <- job_postings |>
+  mutate(state = str_extract(location, ", ([A-Z]{2})$", group=1))
+```
+
+## Bar plot of `states`
+```{webr}
+jp_state |> drop_na(state) |> count(state) |>
+  mutate(state = fct_reorder(state, n)) |>
+  ggplot(aes(x=state, y=n)) +
+  geom_col(fill = "lightblue", color = "black") +
+  labs(title = "Distribution of States in Job Postings",
+    x = "State",
+    y = "Number of Postings"
+  ) + coord_flip()
+```
+
+## One discrete and one continuous variable: boxplot
+A boxplot visualizes the covariation between a discrete and a continuous variable.
+```{webr}
+job_postings |> 
+  ggplot(aes(x=formatted_experience_level, y=normalized_salary)) +
+  geom_boxplot(fill = "lightblue", color = "black") +
+  labs(title = "Salary by Experience Level",
+    x = "Experience Level",
+    y = "Salary ($)"
+  )
+```
+
+## Interpreting a boxplot
+A boxplot summarizes the distribution of a continuous variable within each level of a discrete variable.
+
+- The box spans the interquartile range (IQR), which contains the middle 50% of the data.
+- The line inside the box is the median (50th percentile).
+- The "whiskers" extend to the most extreme data points that are not considered outliers. (Typically, this is 1.5 times the IQR beyond the box.)
+- Points beyond the whiskers are considered outliers and plotted individually.
+
+## Two discrete variables: heatmap
+A heatmap visualizes the covariation between two discrete variables.
+```{webr}
+job_postings |> 
+  mutate(software = str_detect(title, regex("software", ignore_case=TRUE))) |>
+```
+
+# Examples of good and bad visualizations
+Here are some examples of good and bad visualizations I have seen recently while 
+~~wasting time~~ working online.
+
+
+## Good: Euro crisis
+
+![euro](https://www.royfrancis.com/assets/images/posts/2015/2015-10-01-elegant-scientific-graphs-learning-from-examples/reuters-europe-unemployment.jpg)
+
+## Bad: European ancestry
+
+![euro_bad](images/bad_euro_map.png)
+
+## Abusing the y-axis
+
+![newspapers](images/news.png)
+
+## More abuse
+
+![biden vs trump](images/biden_trump.png)
+
+## 131%
+
+![image4.png](images/image3.png)
+
+## Make it better
+
+```{webr}
+tribble(
+    ~event, ~probability,
+    "NDA staying below 220", .09,
+    "NDA crossing 250", .72,
+    "NDA getting a majority", .5
+))
+```
+
+
+## A giant amongst women
+
+![image6.png](images/image4.png)
+
+## Make it better
+
+```{webr}
+tribble(
+    ~country, ~height,
+    "Latvia", "5'5",
+    "Australia", "5'4",
+    "Scotland", "5'4",
+    "Peru", "5'4",
+    "South Africa", "5'2",
+    "India", "5'0"
+)
+```
+
+## Bangalore
+
+![bangalore](images/bangalore.png)
+
+## Alotofinformationforsuchasmallspace
+
+![image5.png](images/image5.png)
+
+
+## y-not
+
+![image7.png](images/image7.png)
+
+## Time warp
+
+![image8.png](images/image8.png)
+
+# Tips for making bad plots
+
+![display data badly](images/image9.png)
+
+## Show as Few Data as Possible 
+
+- [Tufte](https://www.edwardtufte.com/tufte/) (famous data viz person) defines the "data density index" (ddi) as "the number of numbers plotted per square inch." 
+- In order to make a bad plot, you want to strive for a ddi that is _as low as possible_.
+- Rough guidelines:
+    - $\text{ddi}=1$: novice
+    - $\text{ddi}=.5$: intermediate
+    - $\text{ddi}=.1$: elite-level, or first-year art student
+- (Anything above ddi=20 places you at risk of making a good plot.)
+
+
+## Low ddi
+
+![image11.png](images/image10.png)
+
+There are three numbers plotted in a $5\times 3 \text{in}$ graphic, so $\text{ddi}=.2$.
+
+## Make it better
+
+```R
+df1a <- tribble(
+    ~year, ~jp_pct,
+    1967,  .44,
+    1972,  .623,
+    1977, .70
+)
+```
+
+## Lower ddi
+![image12.png](images/image11.png)
+## Make it better
+
+```R
+df1b <- tribble(
+    ~year, ~expenditures,
+    1972, 75,
+    1974, 80,
+    1976, 125,
+    1978, 200,
+    1980, 245,
+    1982, 305
+)
+```
+
+## Hide the data
+- In situations where it is necessary to show data, make sure it is well hidden.
+- Add visual distractions such as grids, illustrations, and other doo-dads that draw the eye away from the data points.
+- Minimize variation by choosing a scale that is several order of magnitude larger than the natural range of the data. 
+
+![image13.png](images/image12.png)
+## Make it better
+
+```R
+df2 <- tribble(
+    ~school_year, ~type, ~n,
+    1930, "private", 9275,
+    1940, "private", 10000,
+    1950, "private", 10375,
+    1960, "private", 13574,
+    1970, "private", 14372,
+    1930, "public", 255000,
+    1940, "public", 191000,
+    1950, "public", 140000,
+    1960, "public", 105000,
+    1970, "public", 85000,
+)
+```
+
+## Trick the eye
+
+The human eye is easily deceived by changes in ordering, scale, and visual metaphor: 
+  - Switch up the scale, preferably in the same plot.
+  - Represent smaller numbers using larger objects, and vice versa.
+  - Represent lengths by area.
+
+![image16.png](images/image14.png)
+
+## Make it better
+
+```R
+df3 <- tribble(
+    ~year, ~president, ~ppower,
+    1958,  "eisenhower", 1.0,
+    1963, "kennedy", .94,
+    1968, "johnson", .83,
+    1973, "nixon", .64,
+    1975, "ford", .60,
+    1978, "carter", .44
+)
+```
