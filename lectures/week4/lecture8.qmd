@@ -1,0 +1,280 @@
+---
+title: "DATASCI 306"
+subtitle: "Lecture 8"
+format: live-revealjs
+engine: knitr
+webr:
+  packages:
+    - tidyverse
+  resources:
+    - earnings.RData
+---
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+load("earnings.RData")
+```
+```{webr}
+#| echo: false
+#| message: false
+#| warning: false
+#| autorun: true
+library(tidyverse)
+load("earnings.RData")
+```
+
+[https://ds306.org/lectures/week4/lecture8.html](https://ds306.org/lectures/week4/lecture8.html)
+
+## Recap from Lecture 7
+- What is EDA?
+- Basics of good plotting.
+- Appropriate plots for different data types.
+
+## Today's lecture
+- See examples of good and bad plots.
+- Learn how to make great plots.
+
+# How to make bad plots
+
+![display data badly](images/image9.png)
+
+Sources:
+[wtf.viz](https://wtf.viz), [/r/dataisugly](https://www.reddit.com/r/dataisugly/),
+[badvisualizations.tumblr.com](http://badvisualizations.tumblr.com/)
+
+# Show as few data as possible, in weird ways
+
+## DDI
+
+- [Tufte](https://www.edwardtufte.com/tufte/) (famous data viz person) defines the "data density index" (ddi) as "the number of numbers plotted per square inch." 
+- In order to make a bad plot, you want to strive for a ddi that is _as low as possible_.
+    - $\text{ddi}=1$: novice
+    - $\text{ddi}=.5$: intermediate
+    - $\text{ddi}=.1$: elite-level, or first-year art student
+    - $\text{ddi}>20$: risks making good plot
+    
+## High ddi
+![excess deaths](images/excess_deaths.png)
+    
+
+## Low ddi
+
+![image11.png](images/image10.png)
+
+There are six numbers plotted in a $6\times 5 \text{in}$ graphic, so $\text{ddi}=.2\, \text{numbers}/\text{in}^2$.
+
+## Make it better
+
+```{webr}
+df <- tribble(
+    ~year, ~jp_pct,
+    1967,  .44,
+    1972,  .623,
+    1977, .70
+)
+```
+
+## It's a stretch
+
+![neck vis](images/neck.jpg)
+
+## Make it better
+```{webr}
+df <- tribble(
+    ~team,        ~earnings,
+    "Giants",     1375000,
+    "Jaguars",    1280232, 
+    "Raiders",    1865525,
+    "Cardinals",  5000000,
+    "Bears",      18500000,
+    "Buccaneers", 3946782,
+)
+```
+
+
+## $\text{ddi}=\infty$
+
+![image5.png](images/image5.png)
+
+# Trick the eye
+
+- Mess with the scale.
+- Represent smaller numbers using larger objects, and vice versa.
+- Represent lengths by area.
+  
+## A giant amongst women
+
+![image6.png](images/image4.png)
+
+## Make it better
+
+```{webr}
+tribble(
+    ~country, ~height,
+    "Latvia", "5'5",
+    "Australia", "5'4",
+    "Scotland", "5'4",
+    "Peru", "5'4",
+    "South Africa", "5'2",
+    "India", "5'0"
+)
+```
+
+## Popstars
+
+![popstars](images/popstars.jpeg)
+
+## Make it better
+```{webr}
+df <- tribble(
+  ~name,           ~height_m,
+  "Nicki Minaj",   1.54,
+  "Kylie Minogue", 1.55,
+  "Lady Gaga",     1.55,
+  "Ariana Grande", 1.57,
+  "Rihanna",       1.73,
+  "Katy Perry",    1.73,
+  "Taylor Swift",  1.80,
+  "Iggy Azalea",   1.82
+)
+```
+
+## Carter vs. Everyone
+
+![image16.png](images/image14.png)
+
+## Make it better
+
+```{webr}
+df <- tribble(
+    ~year, ~president, ~ppower,
+    1958,  "Eisenhower", 1.0,
+    1963, "Kennedy", .94,
+    1968, "Johnson", .83,
+    1973, "Nixon", .64,
+    1975, "Ford", .60,
+    1978, "Carter", .44
+)
+```
+
+# Fiddle with/omit the axes
+
+## Biden vs. Trump
+
+![biden vs trump](images/biden_trump.png)
+
+## Time warp
+
+![image8.png](images/image8.png)
+
+## Make it better
+
+```{webr}
+df <- tibble(
+  year = c(1750, 1800, 1830, 1860, 1880, 1900, 1913, 1928, 1938, 1973, 2006, 2016),
+  United_Kingdom = c(3, 4, 6, 25, 21, 17, 9, 5, 3, 7, 3, 3),
+  Russia         = c(2, 4, 4, 6, 9, 9, 8, 7, 9, 10, 6, 5),
+  Western_Europe = c(12, 13, 15, 23, 25, 27, 29, 27, 28, 23, 20, 15),
+  North_America  = c(2, 3, 5, 10, 14, 23, 35, 40, 36, 32, 23, 16),
+  China          = c(33, 32, 30, 10, 11, 7, 4, 4, 4, 4, 17, 28),
+  East_Asia      = c(4, 4, 5, 4, 4, 3, 3, 3, 4, 5, 10, 16),
+  Indian_subcontinent = c(24, 20, 17, 7, 4, 2, 2, 3, 3, 4, 8, 5),
+  Rest_of_world  = c(20, 20, 18, 15, 12, 12, 10, 11, 13, 15, 13, 12)
+)
+```
+
+
+## Make it better
+
+```{webr}
+ggplot(df)
+```
+
+## I think your Gibbs sampler is broken
+![bad plot](https://www.biostat.wisc.edu/~kbroman/topten_worstgraphs/mykland_fig1.jpg)
+<caption> (Actual plot from a paper in a respected statistics journal.)</caption>
+<small>Source: <a href="https://www.biostat.wisc.edu/~kbroman/topten_worstgraphs/">https://www.biostat.wisc.edu/~kbroman/topten_worstgraphs/</a></small>
+
+## News vs. Post
+
+![newspapers](images/news.png)
+
+## Make it better
+
+```{webr}
+df <- tribble(
+    ~year, ~paper, ~subscribers,
+    1977, "post", 503000,
+    1978, "post", 621000,
+    1979, "post", 642000,
+    1980, "post", 654000,
+    1981, "post", 732000,
+    1977, "news", 1911000,
+    1978, "news", 1829000,
+    1979, "news", 1636000,
+    1980, "news", 1555000,
+    1981, "news", 1491000
+
+)
+```
+
+## y-not
+
+![image7.png](images/image7.png)
+
+# Misuse maps
+
+![divided](images/divided_nation.jpg)
+
+## Good: Euro crisis
+
+![euro](https://www.royfrancis.com/assets/images/posts/2015/2015-10-01-elegant-scientific-graphs-learning-from-examples/reuters-europe-unemployment.jpg)
+## Bad: European ancestry
+
+![euro_bad](images/bad_euro_map.png)
+
+## Make it better
+
+![euro_good](images/us_ancestry.png)
+
+# Abuse of pie charts
+
+## Bangawha?
+![bangalore](images/bangalore.png)
+
+## Memes
+
+![memes](images/memes.jpeg)
+
+## 131%
+
+![image4.png](images/image3.png)
+
+## Make it better
+
+```{webr}
+tribble(
+    ~event, ~probability,
+    "NDA staying below 220", .09,
+    "NDA crossing 250", .72,
+    "NDA getting a majority", .5
+))
+```
+
+# Dwell on the trivial
+Prefer plots that emphasize inconsequential differences in the data, thus obscuring the important ones.
+
+## Earnings
+ 
+![image21.png](images/image21.png)
+
+## Make it better
+
+```{webr}
+# earnings differences, men vs women
+earnings
+```
