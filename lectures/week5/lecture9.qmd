@@ -1,0 +1,225 @@
+---
+title: "DATASCI 306"
+subtitle: "Lecture 9"
+format: live-revealjs
+engine: knitr
+revealjs-plugins:
+  - drop
+resources:
+  - data/europop.html
+  - data/oes.RData
+  - data/uer.RData
+  - data/simpsons_1-20.html
+  - data/simpsons.RData
+  - data/oes152051_2023.htm
+  - data/oes152051_2022.htm
+  - data/oes152051_2021.htm
+webr:
+  packages:
+    - tidyverse
+---
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+library(rvest)
+load("data/uer.RData")
+load("data/oes.RData")
+load("data/simpsons.RData")
+```
+```{webr}
+#| echo: false
+#| message: false
+#| warning: false
+#| autorun: true
+library(tidyverse)
+library(rvest)
+load("data/uer.RData")
+load("data/simpsons.RData")
+load("data/oes.RData")
+```
+
+[https://ds306.org/lectures/week5/lecture9.html](https://ds306.org/lectures/week5/lecture9.html)
+
+## Recap from Lecture 8
+- See examples of good and bad plots.
+- Learn how to make great plots.
+
+## Today's lecture
+- Advanced plots.
+- Learn how to import data from the web.
+- Study the labor market for college grads and data scientists.
+
+## Web API
+- Today we'll study data from the [Bureau of Labor Statistics](https://www.bls.gov) (BLS).
+  - [LNS14027662](https://fred.stlouisfed.org/series/LNS14027662)
+  - [LNS14027689](https://fred.stlouisfed.org/series/LNS14027689)
+
+## Dowloading data from a web API
+```{r}
+#| echo: true
+#| eval: false
+library(blsR)
+uer <- get_n_series_table(c('LNS14027662', 'LNS14027689', 'LNS14027660'), start_year = 2010, end_year = 2025)
+```
+
+## Desired plot
+```{r}
+#| echo: false
+uer |> 
+mutate(date = as.Date(paste0(as.character(year), "-", str_sub(period, 2), "-01"))) |> 
+pivot_longer(cols = starts_with("L"), names_to = "series_id", values_to = "value") |>
+mutate(series_id = recode(series_id,
+                      LNS14027662 = "Bachelor's degree and higher",
+                      LNS14027689 = "Some college",
+                      LNS14027660 = "High school degree")) |>
+ggplot(aes(x = date, y = value, color = series_id)) +
+  geom_line() +
+  labs(title = "Unemployment rate by educational attainment",
+       subtitle = "25 years and over, 2010-2024",
+       x = "Year", y = "Unemployment rate (%)",
+       color = "Educational attainment") +
+  annotate("rect", xmin = make_date(2020,01,01), xmax = make_date(2022,06,01), ymin = 0, ymax = 20,
+           fill = "gray", alpha = 0.3) +
+  annotate("text", x = make_date(2021,03,01), y = 19, label = "COVID-19\npandemic", size = 3) +
+  theme_classic()
+```
+## Make the plot (step 1)
+```{webr}
+# get the data into the correct format
+```
+
+## Make the plot (step 2)
+```{webr}
+# basic scaffold of plot
+```
+
+## Make the plot (step 3)
+```{webr}
+# add lines and labels
+```
+
+## Make the plot (step 4)
+```{webr}
+# add annotation for COVID
+```
+
+## OES data
+- Occupational Employment Statistics (OES) program
+- Data are divided into many different tables, e.g. [May 2023](https://www.bls.gov/oes/2023/may/oes152051.htm)
+- All the various data are available here: https://www.bls.gov/oes/tables.htm
+- How to download these data and analyze them?
+
+## Ethics of scraping data online
+- You should carefully read [Section 26.2](https://r4ds.hadley.nz/webscraping.html#scraping-ethics-and-legalities) concerning various ethical and legal issues surrounding scraping data from web sites.
+- In this class we will only look at large, public web sites where there is no risk of anything bad happening. 
+- However, there are other situations where it may be unethical, or even illegal, to harvest data from a website, even if you are technically able. 
+- **As data scientists in the real world, it will be up to you to carefully weigh these concerns before using the tools discussed in today's lecture.**
+
+## How do web pages work?
+
+Web pages are written in a special language called HTML (**H**yper**t**ext **M**arkup **L**anguage). Here is a simple example of some HTML:
+
+    <html>
+    <head> 
+      <title>Page title</title>
+    </head>
+    <body>
+      <h1 id='first'>A heading</h1>
+      <p>Some text &amp; <b>some bold text.</b></p>
+      <img src='myimg.png' width='100' height='100'>
+    </body>
+    
+## Structure of web pages
+Web scraping is possible because most web pages have a consistent, hierarchical structure. For example, if I asked you how to navigate to the title of the web page shown above, you would follow the "path"
+
+    html > head > title
+    
+to arrive at "Page title".
+
+
+## HTML elements
+
+There are a lot of HTML elements that might contain interesting information. Here are a few of the most common:
+  - Block tags that denote sections of text: `<h1>` (heading), `<p>` (paragraph), `<ul>`/`<ol>` (un)ordered list, etc.
+  - `<table>` (a table), `<tr>` (a table row), `<td>` (a table cell), etc.
+Each of these elements can contain attributes such as `id=` or `class=`. For example, `<table id="movies">` is probably a table that contains movie information.
+
+## Inspecting a web page
+To see the HTML code for a web page, right-click on the page and select "Inspect":
+
+## <img src="//upload.wikimedia.org/wikipedia/commons/thumb/9/98/The_Simpsons_yellow_logo.svg/250px-The_Simpsons_yellow_logo.svg.png" decoding="async" width="250" height="141" class="mw-file-element" srcset="//upload.wikimedia.org/wikipedia/commons/thumb/9/98/The_Simpsons_yellow_logo.svg/500px-The_Simpsons_yellow_logo.svg.png 1.5x" data-file-width="1920" data-file-height="1080">
+```{webr}
+#| echo: true
+simpsons <- read_html("data/simpsons_1-20.html")
+```
+
+## Tables contained in page
+In this page there are many tables:
+```{webr}
+simpsons |> html_elements("table")
+```
+
+## Extracting a specific table
+We can extract a specific table by its position on the page.
+```{webr}
+#| echo: true
+#| message: false
+episodes_table <- simpsons |> html_elements("table.wikiepisodetable") |> html_table() |> list_rbind()
+```
+
+## Simpsons trivia
+Which episode had the most/least viewers?
+```{webr}
+# convert viewers to a number
+```
+
+## Reading in the data science jobs tables
+```{webr}
+read_html("data/oes152051_2021.htm")
+```
+## Top paying states for data scientists
+```{webr}
+read_html("data/oes152051_2021.htm") |> 
+  html_element("table#oes15-2051_h") |> 
+  html_table()
+```
+## Visualization
+```{r}
+#| echo: false
+paste0("data/oes152051_202", 1:3, ".htm") |> 
+  map(~ read_html(.x) |> html_element("table#oes15-2051_h") |> html_table()) |> 
+  setNames(2021:2023) |>
+  list_rbind(names_to="year") |>
+  mutate(year = as.integer(year)) |>
+  mutate(annual_wage = as.integer(gsub("[$,]","",`Annual mean wage (2)`))) -> oes
+ggplot(oes, aes(x=make_date(year, 1, 1), y=annual_wage / 1000, color=`State`)) +
+  geom_line() +
+  geom_point() +
+  geom_text(data = oes |> filter(year == 2023) |> group_by(`State`) |> slice_max(annual_wage, n=1),
+            aes(label=`State`), hjust=-.1, size=3) +
+  labs(title="Mean annual wage for data scientists",
+       subtitle="2021-2023",
+       x="Year", y="Annual mean wage (thousands of dollars)",
+       color="State") +
+  xlim(make_date(2021,1,1), make_date(2023,6,1)) +
+  theme_classic() + 
+  theme(legend.position = "none")
+```
+
+## Make the plot
+```{webr}
+# parse wages and years
+```
+
+## Make the plot
+```{webr}
+# basic scaffold of plot
+```
+
+## Make the plot
+```{webr}
+# add lines and labels
+```
