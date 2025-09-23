@@ -6,7 +6,6 @@ engine: knitr
 revealjs-plugins:
   - drop
 resources:
-  - data/europop.html
   - data/oes.RData
   - data/uer.RData
   - data/simpsons_1-20.html
@@ -223,3 +222,26 @@ ggplot(oes, aes(x=make_date(year, 1, 1), y=annual_wage / 1000, color=`State`)) +
 ```{webr}
 # add lines and labels
 ```
+
+
+# Quiz questions about this lecture
+1. Which of the following is a legal and ethical concern when scraping data from a website?
+  - A. Violating the website's terms of service
+  - B. Collecting personal data without consent
+  - C. Overloading the website's server with requests
+  - D. All of the above
+  
+2. In the context of web scraping, what is HTML?
+  - A. A programming language used to run a web server
+  - B. A markup language used to structure web pages
+  - C. A database format for storing web data
+  - D. A protocol for transferring data over the internet
+  
+The last three questions are about the `oes` table that's loaded into your R environment.
+3. For which state did mean annual wages go _down_ from 2022 to 2023?
+  
+4. What is the mean annual wage for data scientists in California in 2023 according to
+the `oes` table?
+  
+5. Which state had the highest mean annual wage for data scientists in 2022 according to
+the `oes` table?
