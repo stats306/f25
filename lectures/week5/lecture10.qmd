@@ -1,0 +1,383 @@
+---
+title: "DATASCI 306"
+subtitle: "Lecture 10"
+format: live-revealjs
+engine: knitr
+revealjs-plugins:
+  - drop
+resources:
+  - data/a2weather.RData
+webr:
+  packages:
+    - tidyverse
+---
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+library(modelr)
+load("data/a2weather.RData")
+theme_set(theme_classic())
+```
+```{webr}
+#| echo: false
+#| message: false
+#| warning: false
+#| autorun: true
+library(tidyverse)
+library(modelr)
+theme_set(theme_classic())
+load("data/a2weather.RData")
+```
+
+[https://ds306.org/lectures/week5/lecture10.html](https://ds306.org/lectures/week5/lecture10.html)
+
+## Recap from Lecture 9
+- Advanced plots.
+- Learn how to import data from the web.
+- Study the labor market for college grads and data scientists.
+
+## Next three lectures
+- Study global climate trends.
+- Linear regression.
+
+## GHCN
+- The [Global Historical Climate Network](https://www.ncei.noaa.gov/products/land-based-station/global-historical-climatology-network-daily) is amazing database of daily weather data going back, in some cases, >100 years. 
+- I downloaded daily observation data for Ann Arbor from 1891 to present:
+```{webr}
+load("data/a2weather.RData")
+```
+
+## Exploring the data
+- What do the columns mean?
+- Are these data in wide format or long format?
+- What are the units?
+- How is missing data encoded?
+- Are there any outliers/duplicates?
+
+## Exploring the data
+```{webr}
+glimpse(a2weather)
+```
+- There are some standard columns: `id`, `date`, `year`, `month`
+- What does `element` represent? What about the remaining columns?
+
+## Tidying the data
+A tidy version of this data frame will look like:
+
+       id           year month element   day VALUE MFLAG QFLAG SFLAG
+       <chr>       <int> <int> <chr>   <int> <dbl> <chr> <chr> <chr>
+     1 USC00200230  1891    10 TMAX        1   206 " "   " "   6    
+     2 USC00200230  1891    10 TMAX        2   267 " "   " "   6    
+
+## Reshaping the data
+- The data are in wide format, let's convert to long format.
+- ChatGPT gives:
+```{webr}
+a2weather %>%
+  pivot_longer(
+    cols = starts_with("VALUE"),
+    names_to = "day",
+    names_prefix = "VALUE",
+    values_to = "value"
+  )
+```
+
+## Reshaping the data (improved version)
+- ChatGPT did not do a good job -- not clear what all the columns now represent.
+- With more careful prompting, we get:
+```{webr}
+a2weather %>%
+  pivot_longer(
+    cols = -(1:4),
+    names_to = c(".value", "day"),
+    # pattern: capture VALUE, MFLAG, QFLAG, SFLAG and the day number
+    names_pattern = "(VALUE|MFLAG|QFLAG|SFLAG)(\\d+)",
+    names_transform = list(day = as.integer)
+  )
+```
+
+## Reshaping the data (improved version)
+- ChatGPT did not do a good job -- not clear what all the columns now represent.
+- With more careful prompting, we get:
+```{webr}
+a2w1 <- a2weather %>%
+  pivot_longer(
+    cols = -(1:4),
+    names_to = c(".value", "day"),
+    # pattern: capture VALUE, MFLAG, QFLAG, SFLAG and the day number
+    names_pattern = "(VALUE|MFLAG|QFLAG|SFLAG)(\\d+)",
+    names_transform = list(day = as.integer)
+  ) |> print()
+```
+
+## Additional cleanups
+- Convert dates
+- Units?
+- Missing data?
+```{webr}
+a2weather_tidy
+```
+
+## Preliminary exploration
+How many observations are there per year?
+```{webr}
+a2weather_tidy |>
+  mutate(year = year(date)) |>
+  count(year) |>
+  ggplot(aes(year, n)) +
+  geom_line() +
+  labs(
+    title = "Number of Daily Observations per Year",
+    x = "Year",
+    y = "Number of Observations"
+  )
+```
+
+## Daily temperature
+```{webr}
+a2weather_tidy |>
+  ggplot(aes(x = date, y = tmax)) +
+  geom_line() +
+  labs(
+    title = "Daily Maximum Temperature in Ann Arbor",
+    x = "Date",
+    y = "Temperature (°C)",
+    color = "Element"
+  )
+```
+
+## Monthly average temperature
+```{webr}
+a2weather_tidy |>
+  mutate(month = floor_date(date, "month")) |>
+  group_by(month) |>
+  summarize(tmax = mean(tmax, na.rm = TRUE)) |>
+  ggplot(aes(x = month, y = tmax)) +
+  geom_line() +
+  labs(
+    title = "Monthly Average Maximum Temperature in Ann Arbor",
+    x = "Month",
+    y = "Temperature (°C)",
+  )
+```
+
+## Recent temperature
+```{webr}
+a2weather_tidy |>
+  filter(date >= today() - ddays(60)) |>
+  ggplot(aes(x = date, y = tmax)) +
+  geom_line() +
+  labs(
+    title = "Daily High Temperature in Ann Arbor",
+    x = "Day",
+    y = "Temperature (°C)",
+  )
+```
+## Temperature on Halloween
+```{webr}
+a2weather_tidy |>
+  filter(month(date) == 10, day(date) == 31) |>
+  ggplot(aes(x = year(date), y = tmax * 1.8 + 32)) +
+  geom_line() +
+  labs(
+    title = "Halloween High Temperature in Ann Arbor",
+    x = "Year",
+    y = "Temperature (°F)",
+  )
+```
+## Are temperatures increasing?
+- Now suppose we want to go further and quantify whether temperatures are increasing over time.
+- To do this we need a *statistical model*.
+
+# Statistical modeling
+
+A statistical model is a mathematical formula that relates an outcome with one or more explanatory variables.
+
+$$ Y = f (X) + 	\epsilon$$
+
+* Y - outcome
+* f - model function
+* X - explainer
+* $\epsilon$ - noise
+
+## Linear regression
+- The simplest and most widely used used statistical model is *linear regression*.
+$$ y = \beta_0 + \beta_1 \times x + \epsilon$$
+- i.e., $f(x) = \beta_0 + \beta_1(x)$ (a line)
+
+## Linear regression versus other models
+- Linear regression is easy to fit and interpret: $\beta_1$ is the change in $y$ for a one unit increase in $x$.
+- In more advanced courses we will learn about more flexible models (e.g., splines, GAMs, random forests, neural networks).
+- There is no "true" model, just models that are more or less useful for a given purpose.
+
+## Fitting a linear regression model
+- Let's use linear regression to quantify whether temperatures are increasing over time in Ann Arbor.
+- Concretely, let's fit the following model:
+    $$\mathrm{tmax}(t) = \beta_0 + \beta_1 \times t + \epsilon$$
+    
+## Linear regression in R
+```{webr}
+mdl <- lm(tmax ~ date, data = a2weather_tidy)
+summary(mdl)
+```
+
+## Important components of the regression output
+- Coefficients table
+    - Estimate: the fitted values of $\beta_0$ and $\beta_1$
+    - Std. Error: standard error of the estimates
+    - Pr(>|t|): p-value for null hypothesis that coefficient is zero
+- Multiple R-squared: proportion of variance explained by the model
+- F-statistic: overall significance of the model
+- Degrees of freedom: number of observations minus number of parameters
+
+## Interpreting the results
+```{webr}
+coef(mdl)
+```
+- The estimated slope is 4.3e-5, which means that the daily maximum temperature increases by 0.000043 degrees Celsius per day.
+- How much increase over 100 years?
+
+## $R^2$
+- R-squared measures the proportion of variance explained by the model.
+- In simple linear regression, it is the square of the correlation between $x$ and $y$.
+```{webr}
+summary(mdl)$r.squared
+cor(as.numeric(a2weather_tidy$date), a2weather_tidy$tmax, use="complete.obs")^2
+```
+- Important: $R^2$ does not measure whether the model is "true" or "useful". I can always
+make $R^2$ larger by adding more variables.
+
+## Residuals
+- The residual is the difference between the predicted and observed value:
+$$\text{resid}_i = y_i - \hat{y}_i = y_i - (\beta_0 + \beta_1 x_i).$$
+- Thus, it's the part of the data that is not explained by the model.
+- The residuals should look like random noise if the model is a good fit. 
+- If there are clear patterns in the residuals, then the model is missing something.
+
+## Residual plot
+```{webr}
+a2weather_tidy |>
+  add_residuals(mdl) |>
+  ggplot(aes(x = resid)) +
+  geom_histogram() +
+  labs(
+    title = "Residuals from Linear Regression Model",
+    x = "Residual",
+  )
+```
+
+## Improving the model
+- What is driving the patterns in the residuals? 
+- Seasonal variation in temperature.
+- Let's make the model slightly more advanced by adding in indicator variable for
+  the summer:
+
+$$
+\mathrm{tmax}(t) = \beta_0 + \beta_1 \times t + \beta_2 \times I(\text{summer}) + \epsilon
+$$
+
+
+## Multiple linear regression
+
+To be clear on what this represents, since you may not have seen multiple regression before:
+
+  - For each row we generate a 0/1 indicator variable that is 1 if the month is May to September (inclusive) and 0 otherwise.
+  - For the summer months, the model is $\mathrm{tmax}(t) = \beta_0 + \beta_1 \times t + \beta_2 + \epsilon$. The intercept is now $\beta_0 + \beta_2$.
+  - For the other months, the model is $\mathrm{tmax}(t) = \beta_0 + \beta_1 \times t + \epsilon$. The intercept is $\beta_0$.
+  
+## Graphically
+In graphical terms, we're fitting two lines with the same slope but different intercepts.
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+a2weather_tidy |>
+  mutate(summer = ifelse(month(date) %in% 5:9, "Summer", "Other")) |>
+  ggplot(aes(x = date, y = tmax, color = summer)) +
+  geom_point(alpha = 0.01) +
+  # make regression lines have same slope
+  geom_smooth(method = "lm") +
+  labs(
+    title = "Daily Maximum Temperature in Ann Arbor",
+    x = "Date",
+    y = "Temperature (°C)",
+    color = "Season"
+  )
+```
+  
+## Summer regression
+```{webr}
+mdl.summer <- lm(tmax ~ date + I(month(date) %in% 5:9), data = a2weather_tidy)
+summary(mdl.summer)
+```
+Whoah! Our R^2 jumped to around 0.6!
+
+## Interpreting the model
+- When we add indicator variables, the interpretation of the coefficients changes.
+- The slope $\beta_1$ is now the increase in temperature over time *after accounting for seasonal variation*.
+- The coefficient $\beta_2$ is the increase in temperature during the summer months (May to September) compared to the other months, after accounting for the trend over time.
+- The slope slightly lower than before, but still positive and significant.
+
+## Residual plot
+```{webr}
+a2weather_tidy |>
+  add_residuals(mdl.summer) |>
+  ggplot(aes(x = resid)) +
+  geom_histogram() +
+  labs(
+    title = "Residuals from Linear Regression Model with Summer Indicator",
+    x = "Residual",
+  )
+```
+
+## Seasonal trends
+We can still do better -- let's look at the annual temperature cycle:
+```{webr}
+#| autorun: true
+(p1 <- a2weather_tidy |> mutate(doy = yday(date)) |> group_by(doy) |>
+  summarize(tmax = mean(tmax, na.rm = TRUE)) |>
+  ggplot(aes(x = doy, y = tmax)) + geom_line() +
+  labs(title = "Average Annual Temperature Cycle in Ann Arbor",
+    x = "Day of Year", y = "Temperature (°C)"))
+```
+
+## Describing the seasonality
+Let's try guessing this function "by hand":
+```{webr}
+p1 + stat_function(
+  fun =  function(x) sin(x),
+  color = "red")
+```
+
+## Adding nonlinear terms
+- Learn the function from data
+$$ \mathrm{tmax}(t) = \beta_0 + \beta_1 \times \sin(t / 365+\beta_2) + \epsilon $$
+- Note that we have to estimate $\beta_2$ as well, which makes this a nonlinear regression model.
+- *But*, we can be smart and use triginometry:
+  $$A \sin(\omega t + \phi) = \beta_1 \sin(\omega t) + \beta_2 \cos(\omega t)$$
+  where $A = \sqrt{\beta_1^2 + \beta_2^2}$ and $\phi = \tan^{-1}(\beta_2/\beta_1)$.
+
+## Sine/cosine regression
+```{webr}
+mdl.trig <- a2weather_tidy |> mutate(doy = yday(date)) |>
+  lm(tmax ~ sin(2 * pi * doy / 365) + cos(2 * pi * doy / 365), data = _)
+summary(mdl.trig)
+```
+
+## Verify that it worked
+```{webr}
+beta <- coef(mdl.trig)
+p1 + stat_function(fun = function(x)
+  beta[1] + 
+  beta[2] * sin(2 * pi * x / 365) + 
+  beta[3] * cos(2 * pi * x / 365), color = "red")
+```
+## Putting it all together
+```{webr}
+mdl.final <- lm(tmax ~ date + sin(2 * pi * yday(date) / 365) + cos(2 * pi * yday(date) / 365), data = a2weather_tidy)
+summary(mdl.final)
+```
