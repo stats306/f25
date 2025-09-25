@@ -100,20 +100,6 @@ a2weather %>%
   )
 ```
 
-## Reshaping the data (improved version)
-- ChatGPT did not do a good job -- not clear what all the columns now represent.
-- With more careful prompting, we get:
-```{webr}
-a2w1 <- a2weather %>%
-  pivot_longer(
-    cols = -(1:4),
-    names_to = c(".value", "day"),
-    # pattern: capture VALUE, MFLAG, QFLAG, SFLAG and the day number
-    names_pattern = "(VALUE|MFLAG|QFLAG|SFLAG)(\\d+)",
-    names_transform = list(day = as.integer)
-  ) |> print()
-```
-
 ## Additional cleanups
 - Convert dates
 - Units?
@@ -279,6 +265,7 @@ a2weather_tidy |>
 $$
 \mathrm{tmax}(t) = \beta_0 + \beta_1 \times t + \beta_2 \times I(\text{summer}) + \epsilon
 $$
+
 ## Regression with categorical variables
 - If we add a categorical variable with $k$ levels to a regression model, R will automatically create $k-1$ indicator variables.
 - The coefficients of these indicator variables represent the difference in intercept between the corresponding level and the reference level.
