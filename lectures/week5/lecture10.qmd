@@ -279,15 +279,18 @@ a2weather_tidy |>
 $$
 \mathrm{tmax}(t) = \beta_0 + \beta_1 \times t + \beta_2 \times I(\text{summer}) + \epsilon
 $$
+## Regression with categorical variables
+- If we add a categorical variable with $k$ levels to a regression model, R will automatically create $k-1$ indicator variables.
+- The coefficients of these indicator variables represent the difference in intercept between the corresponding level and the reference level.
+```{webr}
+lm(Sepal.Length ~ Species, data = iris) |> summary()
+```
 
 
-## Multiple linear regression
-
-To be clear on what this represents, since you may not have seen multiple regression before:
-
-  - For each row we generate a 0/1 indicator variable that is 1 if the month is May to September (inclusive) and 0 otherwise.
-  - For the summer months, the model is $\mathrm{tmax}(t) = \beta_0 + \beta_1 \times t + \beta_2 + \epsilon$. The intercept is now $\beta_0 + \beta_2$.
-  - For the other months, the model is $\mathrm{tmax}(t) = \beta_0 + \beta_1 \times t + \epsilon$. The intercept is $\beta_0$.
+## Summer regression
+- For each row we generate a 0/1 indicator variable that is 1 if the month is May to September (inclusive) and 0 otherwise.
+- For the summer months, the model is $\mathrm{tmax}(t) = \beta_0 + \beta_1 \times t + \beta_2 + \epsilon$. The intercept is now $\beta_0 + \beta_2$.
+- For the other months, the model is $\mathrm{tmax}(t) = \beta_0 + \beta_1 \times t + \epsilon$. The intercept is $\beta_0$.
   
 ## Graphically
 In graphical terms, we're fitting two lines with the same slope but different intercepts.
@@ -380,4 +383,22 @@ p1 + stat_function(fun = function(x)
 ```{webr}
 mdl.final <- lm(tmax ~ date + sin(2 * pi * yday(date) / 365) + cos(2 * pi * yday(date) / 365), data = a2weather_tidy)
 summary(mdl.final)
+```
+
+## 
+
+```{r}
+#| echo: false
+set.seed(42)
+mpg |> sample_frac(.9) |> 
+  mutate(x1=cty, y=hwy, x2=fct_recode(
+  class, 
+    "A"="2seater",
+    "A"="subcompact",
+    "A"="compact",
+    "B"="midsize",
+    "C"="suv",
+    "C"="minivan",
+    "D"="pickup",
+)) |> select(y, x1, x2) %>% lm(y ~ x1 + x2, data=.) |> summary()
 ```
