@@ -371,21 +371,3 @@ p1 + stat_function(fun = function(x)
 mdl.final <- lm(tmax ~ date + sin(2 * pi * yday(date) / 365) + cos(2 * pi * yday(date) / 365), data = a2weather_tidy)
 summary(mdl.final)
 ```
-
-## 
-
-```{r}
-#| echo: false
-set.seed(42)
-mpg |> sample_frac(.9) |> 
-  mutate(x1=cty, y=hwy, x2=fct_recode(
-  class, 
-    "A"="2seater",
-    "A"="subcompact",
-    "A"="compact",
-    "B"="midsize",
-    "C"="suv",
-    "C"="minivan",
-    "D"="pickup",
-)) |> select(y, x1, x2) %>% lm(y ~ x1 + x2, data=.) |> summary()
-```
