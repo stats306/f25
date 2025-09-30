@@ -1,0 +1,251 @@
+---
+title: "DATASCI 306"
+subtitle: "Lecture 11"
+format: live-revealjs
+engine: knitr
+revealjs-plugins:
+  - drop
+resources:
+  - data/weather.RData
+webr:
+  packages:
+    - tidyverse
+---
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+library(modelr)
+load("data/weather.RData")
+theme_set(theme_classic())
+```
+```{webr}
+#| echo: false
+#| message: false
+#| warning: false
+#| autorun: true
+library(tidyverse)
+library(modelr)
+theme_set(theme_classic())
+load("data/weather.RData")
+```
+
+[https://ds306.org/lectures/week6/lecture11.html](https://ds306.org/lectures/week6/lecture11.html)
+
+## Recap from Lecture 10 
+- Climate trends in Ann Arbor.
+- Linear regression.
+
+## Today's lecture
+- More on regression modeling.
+
+```{webr}
+load("data/weather.RData")
+```
+
+## Seasonal trends
+Let's look at the annual temperature cycle:
+```{webr}
+#| autorun: true
+(p1 <- a2weather |> mutate(doy = yday(date)) |> group_by(doy) |>
+  summarize(tmax = mean(tmax, na.rm = TRUE)) |>
+  ggplot(aes(x = doy, y = tmax)) + geom_line() +
+  labs(title = "Average Annual Temperature Cycle in Ann Arbor",
+    x = "Day of Year", y = "Temperature (°C)"))
+```
+
+## Describing the seasonality
+Let's try guessing this function "by hand":
+```{webr}
+p1 + stat_function(
+  fun =  function(x) sin(x),
+  color = "red")
+```
+
+## Adding nonlinear terms
+- Learn the function from data
+$$ \mathrm{tmax}(t) = \beta_0 + \beta_1 \times \sin(t / 365+\beta_2) + \epsilon $$
+- Note that we have to estimate $\beta_2$ as well, which makes this a nonlinear regression model.
+- *But*, we can be smart and use triginometry:
+  $$A \sin(\omega t + \phi) = \beta_1 \sin(\omega t) + \beta_2 \cos(\omega t)$$
+  where $A = \sqrt{\beta_1^2 + \beta_2^2}$ and $\phi = \tan^{-1}(\beta_2/\beta_1)$.
+
+## Sine/cosine regression
+```{webr}
+mdl.trig <- a2weather |> mutate(doy = yday(date)) |>
+  lm(tmax ~ sin(2 * pi * doy / 365) + cos(2 * pi * doy / 365), data = _)
+summary(mdl.trig)
+```
+
+## Verify that it worked
+```{webr}
+beta <- coef(mdl.trig)
+p1 + stat_function(fun = function(x)
+  beta[1] + 
+  beta[2] * sin(2 * pi * x / 365) + 
+  beta[3] * cos(2 * pi * x / 365), color = "red")
+```
+## Putting it all together
+```{webr}
+mdl.a2 <- lm(tmax ~ date + sin(2 * pi * yday(date) / 365) + 
+                  cos(2 * pi * yday(date) / 365), data = a2weather)
+summary(mdl.a2)
+```
+
+## Residuals
+```{webr}
+a2weather |> add_residuals(mdl.a2) |> 
+  ggplot(aes(x = resid)) +  geom_histogram(bins=100)
+```    
+
+## Predictions 
+How does the model prediction compare with recent actual temp?
+```{webr}
+a2weather |> filter(year(date) == 2025, month(date) >= 9) |> 
+  add_predictions(mdl.a2) |> ggplot(aes(x = date)) + 
+  geom_line(aes(y = pred), color = "red") +
+  geom_point(aes(y = tmax), alpha = 0.5)
+```
+                             
+## Forecasting
+Having a statistical model enables us to **forecast** future values.
+```{webr}
+tibble(date = seq(as.Date("2025-10-01"),  as.Date("2026-01-01"),  by = "day")) |>
+  mutate(doy = yday(date)) |> add_predictions(mdl.a2) |> print() -> newdata
+```
+
+## Forecasted temps for this fall
+```{webr}
+#| eval: true
+ggplot(newdata) + 
+  geom_line(aes(x = date, y = pred), color = "red") +
+  labs(title = "Forecasted Daily Maximum Temperatures in Ann Arbor",
+       x = "Date", y = "Temperature (°C)")
+```
+
+## Combining observed and forecasted temps
+```{webr}
+list_rbind(list(a2weather, newdata)) |>
+  filter(year(date) == 2025, month(date) >= 6) |> add_predictions(mdl.a2) |>
+  ggplot(aes(x = date)) +  geom_point(aes(y = tmax), alpha = 0.5) +
+  geom_line(aes(y = pred), color = "red")
+```
+
+# Other climate change metrics
+- So far we've modeled the average daily maximum temperature.
+- Climate science also predicts that the variability of daily temperatures will increase with climate change.
+
+## Measuring variability
+- We can measure variability by looking at the difference between daily max and min temperatures.
+- Let's call this the daily temperature range (DTR).
+```{webr}
+a2weather |> mutate(dtr = tmax - tmin) |>
+  ggplot(aes(x = date, y = dtr)) + 
+  geom_point(alpha = 0.01) +
+  labs(title = "Daily Temperature Range in Ann Arbor",
+       x = "Date", y = "Temperature Range (°C)")
+```
+
+## Average DTR
+Let's look at the average DTR by year.
+```{webr}
+a2weather |> mutate(dtr = tmax - tmin) |> group_by(year = year(date)) |>
+  summarize(dtr = mean(dtr, na.rm = TRUE)) |> ggplot(aes(x = year, y = dtr)) + 
+  geom_point() + geom_smooth(method = "lm")
+```
+
+## Other cities
+- Ann Arbor has seen relatively modest warming compared to other cities.
+- Compare to Reno, NV
+
+##
+```{webr}
+renoweather |> group_by(year = year(date)) |> 
+  summarize(mean_temp = mean(tmax, na.rm = TRUE)) |> 
+  ggplot(aes(x = year, y = mean_temp)) +  geom_point() + 
+  geom_smooth(method = "lm")
+```
+
+## Seasonally adjusted temperature in Reno
+```{webr}
+lm(tmax ~ date + sin(2 * pi * yday(date) / 365) +  
+     cos(2 * pi * yday(date) / 365), data = renoweather) |> summary()
+```
+
+## Fraction of hot days in Reno
+```{webr}
+renoweather |> mutate(hot = tmax >= 35) |> group_by(year = year(date)) |>
+  summarize(num_hot = sum(hot, na.rm = TRUE)) |> 
+  ggplot(aes(x = year, y = num_hot)) +  geom_col()
+```
+
+## Regression
+```{webr}
+renoweather |> mutate(hot = tmax >= 35) |> group_by(year = year(date)) |>
+  summarize(num_hot = sum(hot, na.rm = TRUE)) |> lm(num_hot ~ year, data = _) |> 
+  summary()
+```
+
+## Logistic regression
+- What we'd really like to model is the probability of a hot day.
+- This is a binary outcome (0/1), so we can't use linear regression.
+- We'll cover this when we discuss **logistic regression** later in the semester.
+
+# Testing for difference
+- Is Reno warming faster than Ann Arbor?
+- How to test for this using the tools at our disposal?
+
+## Combined dataset
+```{webr}
+combined <- list_rbind(list(
+  a2 = a2weather |> mutate(city = "Ann Arbor"),
+  reno = renoweather |> mutate(city = "Reno")
+))
+```
+
+## Regression with interaction terms
+- Let's consider the model
+$$ \mathrm{tmax} = \beta_0 + \beta_1 \times \mathrm{date} + \beta_2 \times \mathrm{city} + \epsilon $$
+- Here, `city` is a categorical variable with two levels: "Ann Arbor" and "Reno".
+- The coefficient $\beta_2$ measures the average difference in temperature between the two cities.
+
+## 
+
+```{webr}
+mdl1 <- lm(tmax ~ date + city, data = combined)
+summary(mdl1)
+```
+This tells us that Reno is on average about 4.8°C warmer than Ann Arbor, which is 
+not surprising.
+
+## Adding interaction terms
+- Now consider the model
+$$ \mathrm{tmax} = \beta_0 + \beta_1 \times \mathrm{date} + \beta_2 \times \mathrm{city} + \beta_3 \times \mathrm{date} \times \mathrm{city} + \epsilon  $$
+- The new term $\beta_3 \times \mathrm{date} \times \mathrm{city}$ is an **interaction term**.
+- The coefficient $\beta_3$ measures the difference in warming rates between the two cities.
+
+## Interaction model
+```{webr}
+mdl2 <- lm(tmax ~ date * city, data = combined)
+summary(mdl2)
+```
+According to this model, is Reno warming faster than Ann Arbor?
+
+## Improving the model
+```{webr}
+mdl3 <- lm(tmax ~ date * city + 
+               sin(2 * pi * yday(date) / 365) + 
+               cos(2 * pi * yday(date) / 365), data = combined)
+summary(mdl3)
+```
+
+## Final model
+```{webr}
+mdl4 <- lm(tmax ~ date * (city +
+               sin(2 * pi * yday(date) / 365) + 
+               cos(2 * pi * yday(date) / 365)), data = combined)
+summary(mdl4)
+```
