@@ -3,8 +3,6 @@ title: "DATASCI 306"
 subtitle: "Lecture 12"
 format: live-revealjs
 engine: knitr
-revealjs-plugins:
-  - drop
 resources:
   - data/india-TAVG-Trend.txt
   - data/weather.RData
@@ -12,6 +10,7 @@ resources:
 webr:
   packages:
     - tidyverse
+    - slider
 ---
 {{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
 
@@ -77,9 +76,12 @@ model_matrix(combined, tmax ~ date + city)
 - When `city` is "Ann Arbor", the model is
 $$ \mathrm{tmax} = \beta_0 + \beta_1 \times \mathrm{date} + 0 + \epsilon  $$
 - When `city` is "Reno", the model is
-$$ \mathrm{tmax} = \beta_0 + \beta_1 \times \mathrm{date} + \color{red}{ \beta_2} + \epsilon  $$
-which can also be written as
-$$ \mathrm{tmax} = (\beta_0 + \color{red}{\beta_2}) + \beta_1 \times \mathrm{date} + \epsilon  $$
+$$
+\begin{align}
+\mathrm{tmax} &= \beta_0 + \beta_1 \times \mathrm{date} + \color{red}{ \beta_2} + \epsilon\\
+&= (\beta_0 + \color{red}{\beta_2}) + \beta_1 \times \mathrm{date} + \epsilon
+\end{align}
+$$
 - So $\color{red} {\beta_2}$ is the difference in average temperature between Reno and Ann Arbor.
 
 ## Interpreting the model (graphically)
@@ -190,27 +192,18 @@ anomaly |>  group_by(region, year(date)) |>
   ggplot(aes(`year(date)`, anomaly, color=region)) + geom_line()
 ```
 
-## Moving averages
-Instead of yearly averages, we can use moving averages to smooth the data:
-```{webr}
-anomaly |>  group_by(region) |>  arrange(date) |> 
-  mutate(anomaly = slider::slide_dbl(anomaly, mean, .before=48, .after=48, .complete=TRUE)) |>
-  ggplot(aes(date, anomaly, color=region)) + geom_line()
-```
-
 ## Regression questions
 - An average, how much is global temperature increasing each year?
 - Is the simple linear model adequate?
 
 ## Two-period linear model
 Let's allow the slope to be different before and after 1960:
-```{webr}
+```{r}
 #| echo: false
 #| warning: false
 #| message: false
-anomaly |> filter(region == "united-states") |> 
-  mutate(year = year(date),  smoothed = slider::slide_dbl(anomaly, mean, .before = 48)) |>
-  ggplot() +  geom_line(aes(date, smoothed), alpha=0.1) + 
+anomaly |> filter(region == "united-states") |>  mutate(year = year(date)) |> 
+  ggplot() +  geom_line(aes(date, anomaly), alpha=0.1) + 
   geom_smooth(aes(date, anomaly), method="lm", formula = y ~ x * (x > 1960), se=T)
 ```
 
@@ -253,28 +246,28 @@ ggplot(co2) + geom_line(aes(date, average)) +
 
 ## CO2 and temperature
 ```{webr}
-combined <- inner_join(anomaly |> filter(region == "global") |> select(date, anomaly), 
+co2_temp <- inner_join(anomaly |> filter(region == "global") |> select(date, anomaly), 
                        co2 |> select(date, average_co2), by = "date")
-ggplot(combined) + geom_point(aes(average_co2, anomaly), alpha=0.1) +
+ggplot(co2_temp) + geom_point(aes(average_co2, anomaly), alpha=0.1) +
   labs(x = "CO2 (ppm)", y = "Temperature anomaly (°C)") + 
   geom_smooth(aes(average_co2, anomaly), method="lm", se=F)
 ```
 
 ## Regression model
 ```{webr}
-mdl1 <- lm(anomaly ~ average_co2, data = combined)
+mdl1 <- lm(anomaly ~ average_co2, data = co2_temp)
 summary(mdl1)
 ```
 
 ## Change in CO2 over time
 ```{webr}
-mdl2 <- lm(average_co2 ~ poly(date, 2), data = combined)
+mdl2 <- lm(average_co2 ~ poly(date, 2), data = co2_temp)
 summary(mdl2)
 ```
 
 ## Graphically
 ```{webr}
-ggplot(combined, aes(x=date, y=average_co2)) + 
+ggplot(co2_temp, aes(x=date, y=average_co2)) + 
   geom_line() + geom_smooth(method="lm", formula=y ~ poly(x, 2), se=F)
 ```
 
