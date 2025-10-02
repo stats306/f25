@@ -234,13 +234,13 @@ co2
 
 ## Atmospheric CO2 levels over time
 ```{webr}
-ggplot(co2) + geom_line(aes(date, average)) +  labs(x = "Year", y = "CO2 (ppm)")
+ggplot(co2) + geom_line(aes(date, average_co2)) +  labs(x = "Year", y = "CO2 (ppm)")
 ```
 
 ## Error bars
 ```{webr}
-ggplot(co2) + geom_line(aes(date, average)) +  
-  geom_ribbon(aes(date, ymin=average - sdev, ymax=average + sdev), alpha=0.2) +
+ggplot(co2) + geom_line(aes(date, average_co2)) +  
+  geom_ribbon(aes(date, ymin=average_co2 - sdev, ymax=average_co2 + sdev), alpha=0.2) +
   labs(x = "Year", y = "CO2 (ppm)")
 ```
 
