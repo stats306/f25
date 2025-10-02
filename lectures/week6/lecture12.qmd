@@ -1,0 +1,280 @@
+---
+title: "DATASCI 306"
+subtitle: "Lecture 12"
+format: live-revealjs
+engine: knitr
+revealjs-plugins:
+  - drop
+resources:
+  - data/india-TAVG-Trend.txt
+  - data/weather.RData
+  - data/globalclimate.RData
+webr:
+  packages:
+    - tidyverse
+---
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+library(modelr)
+library(slider)
+load("data/weather.RData")
+load("data/globalclimate.RData")
+theme_set(theme_classic())
+```
+```{webr}
+#| echo: false
+#| message: false
+#| warning: false
+#| autorun: true
+library(tidyverse)
+library(modelr)
+library(slider)
+theme_set(theme_classic())
+load("data/weather.RData")
+load("data/globalclimate.RData")
+```
+
+[https://ds306.org/lectures/week6/lecture12.html](https://ds306.org/lectures/week6/lecture12.html)
+
+## Recap from Lecture 11 
+- Regression modeling.
+- Trends in the local weather of Ann Arbor and Reno.
+
+## Today's lecture
+- More on regression modeling.
+- Trends in global temperatures.
+
+## Regression with interaction terms
+- Let's consider the model
+$$ \mathrm{tmax} = \beta_0 + \beta_1 \times \mathrm{date} + \beta_2 \times \mathrm{city} + \epsilon $$
+- Here, `city` is a categorical variable with two levels: "Ann Arbor" and "Reno".
+- The coefficient $\beta_2$ measures the average difference in temperature between the two cities.
+
+## 
+
+```{webr}
+mdl1 <- lm(tmax ~ date + city, data = combined)
+summary(mdl1)
+```
+This tells us that Reno is on average about 4.8°C warmer than Ann Arbor, which is 
+not surprising.
+
+## Understanding the model
+
+When we include a categorical vector like `city` in a regression model, R generates a new column in our data:
+
+```{webr}
+model_matrix(combined, tmax ~ date + city)
+```
+
+## Interpreting coefficients
+
+- When `city` is "Ann Arbor", the model is
+$$ \mathrm{tmax} = \beta_0 + \beta_1 \times \mathrm{date} + 0 + \epsilon  $$
+- When `city` is "Reno", the model is
+$$ \mathrm{tmax} = \beta_0 + \beta_1 \times \mathrm{date} + \color{red}{ \beta_2} + \epsilon  $$
+which can also be written as
+$$ \mathrm{tmax} = (\beta_0 + \color{red}{\beta_2}) + \beta_1 \times \mathrm{date} + \epsilon  $$
+- So $\color{red} {\beta_2}$ is the difference in average temperature between Reno and Ann Arbor.
+
+## Interpreting the model (graphically)
+We fit two regression lines with the same slope:
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+mdl <- lm(tmax ~ date + city, data = combined)
+
+ggplot(combined, aes(date, tmax, color = city)) +
+  geom_point(alpha = 0.01) +
+  geom_abline(intercept = coef(mdl)[1], slope = coef(mdl)[2], color = "blue") +
+  geom_abline(intercept = coef(mdl)[1] + coef(mdl)[3], slope = coef(mdl)[2], color = "red") +
+  scale_color_manual(values = c("blue", "red")) +
+  labs(y = "Daily maximum temperature (°C)", x = "Date")    
+```
+
+
+
+
+## Adding interaction terms
+- Now consider the model
+$$ \mathrm{tmax} = \beta_0 + \beta_1 \times \mathrm{date} + \beta_2 \times \mathrm{city} + \beta_3 \times \mathrm{date} \times \mathrm{city} + \epsilon  $$
+- The new term $\beta_3 \times \mathrm{date} \times \mathrm{city}$ is an **interaction term**.
+- The coefficient $\beta_3$ measures the difference in warming rates between the two cities.
+
+## Interpreting the model (nuts & bolts version)
+R generates two new columns in our data:
+```{webr}
+csub <- combined |> sample_n(5)
+modelr::model_matrix(csub, tmax ~ date * city) |> head()
+```
+
+## Interpreting the model (math version)
+- When `city` is "Ann Arbor", the model is
+$$ \mathrm{tmax} = \beta_0 + \beta_1 \times \mathrm{date} + 0 + 0 + \epsilon  $$
+- When `city` is "Reno", the model is
+$$ \mathrm{tmax} = \beta_0 + \beta_1 \times \mathrm{date} + \color{red}{\beta_2} + \color{blue}{\beta_3 \times \mathrm{date}} + \epsilon  $$
+which can also be written as
+$$ \mathrm{tmax} = (\beta_0 + \color{red}{\beta_2}) + (\beta_1 + \color{blue}{\beta_3}) \times \mathrm{date} + \epsilon  $$
+
+## Interpreting the model (picture version)
+We fit two regression lines with different slopes:
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+ggplot(combined, aes(date, tmax, color = city)) +
+  geom_point(alpha = 0.01) +
+  geom_smooth(method = "lm", se = FALSE) +
+  scale_color_manual(values = c("blue", "red")) +
+  labs(y = "Daily maximum temperature (°C)", x = "Date")
+```
+
+# Surface temperatures
+- Now let's consider global surface temperatures.
+- We'll use the BEST dataset, which is available from [https://berkeleyearth.org/data/](https://berkeleyearth.org/data/).
+
+
+## Data format
+The [BEST data files](https://berkeley-earth-temperature.s3.us-west-1.amazonaws.com/Regional/TAVG/india-TAVG-Trend.txt) have the following format:
+
+```
+%                  Monthly          Annual          Five-year        Ten-year        Twenty-year
+% Year, Month,  Anomaly, Unc.,   Anomaly, Unc.,   Anomaly, Unc.,   Anomaly, Unc.,   Anomaly, Unc.
+ 
+  1816     5    -0.542  1.344       NaN    NaN       NaN    NaN       NaN    NaN       NaN    NaN
+  1816     6    -1.214  1.506       NaN    NaN       NaN    NaN       NaN    NaN       NaN    NaN
+  ...
+```
+
+## Fixed-width data
+- This is an example of a fixed-width data file.
+- Unlike CSV, the columns are not separated by commas.
+- Instead, each column has a fixed width (number of characters).
+
+## Reading fixed-width data
+(Pre-2020) Laboriously count the number of characters in each column, then use `read.fwf()`.
+```{webr}
+read_fwf("data/india-TAVG-Trend.txt")
+```
+
+## Reading fixed-width data
+(Modernity) ChatGPT can figure this out
+```{webr}
+read_fwf("data/india-TAVG-Trend.txt", 
+ fwf_cols(year = c(1, 6), month = c(7, 14), 
+          anomaly = c(17, 23), uncert = c(25, 30)), comment = "%")
+```
+
+## Full climate data set
+```{webr}
+anomaly
+```
+
+## Investigating the raw data
+```{webr}
+ggplot(anomaly, aes(date, anomaly, color=region)) + geom_line() +
+  labs(x = "Year", y = "Temperature anomaly (°C)")
+```
+
+## Reducing noise
+```{webr}
+anomaly |>  group_by(region, year(date)) |>  
+  summarize(anomaly = mean(anomaly, na.rm=TRUE)) |> 
+  ggplot(aes(`year(date)`, anomaly, color=region)) + geom_line()
+```
+
+## Moving averages
+Instead of yearly averages, we can use moving averages to smooth the data:
+```{webr}
+anomaly |>  group_by(region) |>  arrange(date) |> 
+  mutate(anomaly = slider::slide_dbl(anomaly, mean, .before=48, .after=48, .complete=TRUE)) |>
+  ggplot(aes(date, anomaly, color=region)) + geom_line()
+```
+
+## Regression questions
+- An average, how much is global temperature increasing each year?
+- Is the simple linear model adequate?
+
+## Two-period linear model
+Let's allow the slope to be different before and after 1960:
+```{webr}
+#| echo: false
+#| warning: false
+#| message: false
+anomaly |> filter(region == "united-states") |> 
+  mutate(year = year(date),  smoothed = slider::slide_dbl(anomaly, mean, .before = 48)) |>
+  ggplot() +  geom_line(aes(date, smoothed), alpha=0.1) + 
+  geom_smooth(aes(date, anomaly), method="lm", formula = y ~ x * (x > 1960), se=T)
+```
+
+## 
+```{webr}
+anomaly |> filter(region == "united-states") |> 
+  lm(anomaly ~ date * I(year(date) > 1960), data = _) |> summary()
+```
+## A three-way interaction
+```{webr}
+anomaly |> lm(anomaly ~ date * I(year(date) > 1960) * region, data = _) |> summary()
+```
+
+## Graphical interpretation
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+ggplot(anomaly, aes(date, anomaly, color=region)) + 
+  geom_smooth(method="lm", formula = y ~ x * (x > 1960), se=F)
+```
+
+# Correlation between temperature and CO2 levels
+Atmospheric CO2 over time: ([Mauna Loa data](https://scrippsco2.ucsd.edu/data/atmospheric_co2/primary_mlo_co2_record.html))
+```{webr}
+co2
+```
+
+## Atmospheric CO2 levels over time
+```{webr}
+ggplot(co2) + geom_line(aes(date, average)) +  labs(x = "Year", y = "CO2 (ppm)")
+```
+
+## Error bars
+```{webr}
+ggplot(co2) + geom_line(aes(date, average)) +  
+  geom_ribbon(aes(date, ymin=average - sdev, ymax=average + sdev), alpha=0.2) +
+  labs(x = "Year", y = "CO2 (ppm)")
+```
+
+## CO2 and temperature
+```{webr}
+combined <- inner_join(anomaly |> filter(region == "global") |> select(date, anomaly), 
+                       co2 |> select(date, average_co2), by = "date")
+ggplot(combined) + geom_point(aes(average_co2, anomaly), alpha=0.1) +
+  labs(x = "CO2 (ppm)", y = "Temperature anomaly (°C)") + 
+  geom_smooth(aes(average_co2, anomaly), method="lm", se=F)
+```
+
+## Regression model
+```{webr}
+mdl1 <- lm(anomaly ~ average_co2, data = combined)
+summary(mdl1)
+```
+
+## Change in CO2 over time
+```{webr}
+mdl2 <- lm(average_co2 ~ poly(date, 2), data = combined)
+summary(mdl2)
+```
+
+## Graphically
+```{webr}
+ggplot(combined, aes(x=date, y=average_co2)) + 
+  geom_line() + geom_smooth(method="lm", formula=y ~ poly(x, 2), se=F)
+```
+
