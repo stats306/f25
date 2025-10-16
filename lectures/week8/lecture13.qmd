@@ -1,0 +1,266 @@
+---
+title: "DATASCI 306"
+subtitle: "Lecture 13"
+format: live-revealjs
+engine: knitr
+resources:
+  - data/a2housing.RData
+webr:
+  packages:
+    - tidyverse
+    - sf
+---
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+library(sf)
+load("data/a2housing.RData")
+theme_set(theme_classic())
+options(tigris_use_cache = TRUE)
+```
+```{webr}
+#| echo: false
+#| message: false
+#| warning: false
+#| autorun: true
+library(tidyverse)
+library(sf)
+load("data/a2housing.RData")
+theme_set(theme_classic())
+```
+
+```{=html}
+<style>
+.qrcode img {
+  margin: 20px auto;
+}
+</style>
+```
+
+[https://ds306.org/lectures/week8/lecture13.html](https://ds306.org/lectures/week8/lecture13.html)
+
+# Where should I live?
+
+- Soon you will graduate college.
+- You may choose to live anywhere!
+- How to decide where?
+
+## Factors to consider
+
+- Cost of living
+- Job opportunities
+- Climate
+- Culture
+- ???
+
+## Survey
+
+https://ds306.org/survey3
+
+{{< qrcode https://ds306.org/survey3 width=300 height=300 >}}
+
+## Spatial data analysis
+- Spatial data analysis is the study of data that has a spatial component, such as location or geography.
+- Spatial data analysis can help us understand patterns and relationships in data that are influenced by location.
+
+## Example spatial data set: housing prices in A2
+- Suppose you choose to remain in Ann Arbor. 
+- You may want to buy a house.
+- Where should you buy a house?
+
+## `a2housing`
+`a2housing` contains information about housing prices in Ann Arbor over the past
+4 years.
+
+```{webr}
+a2housing
+```
+
+## Basics
+- `a2housing` is a data frame with ~11k rows and 10 columns.
+- Each row is a house that was sold in Ann Arbor between 2021 and present.
+
+## Exploring the data
+```{r echo=T, messages=F}
+library(GGally)
+a2housing |> select(where(is.numeric)) |> ggpairs()
+```
+
+## Correlations
+```{r echo=T}
+library(ggcorrplot)
+corr <- a2housing |> dplyr::select(where(is.numeric)) |> cor(use = "pairwise.complete.obs")
+ggcorrplot(corr)
+```
+
+## Spatial data
+- Each row of `a2housing` has **location**, given by the address.
+- For example, the first row is a house at "1015 S Main St, Ann Arbor, MI 48104".
+- Suppose we want to place these houses on a map...?
+
+## Geocoding
+- Geocoding is the process of converting addresses into geographic coordinates (latitude and longitude).
+- I geocoded these data for you using the US Census Geocoding API.
+- The `lat` and `lon` columns contain the latitude and longitude of each house.
+
+## Mapping the data
+```{webr}
+ggplot(a2housing) + geom_point(aes(long, lat), alpha = 0.1)
+```
+
+## Problems with this plot
+- The points are not projected onto a map.
+- Not easy to see patterns or even localize the points to places in Ann Arbor.
+
+## `sf` package
+- To work with spatial data in R, we can use the `sf` package.
+```{webr}
+library(sf)
+```
+- The `sf` package provides functions for reading, writing, and manipulating spatial data.
+
+## Convert to `sf` object
+- We can convert `a2housing` to an `sf` object using the `st_as_sf()` function.
+- We need to specify the coordinates and the coordinate reference system (CRS).
+
+```{r}
+a2housing_sf <- a2housing |> filter(!is.na(long), !is.na(lat)) |>
+  st_as_sf(coords = c("long", "lat"), crs = 4326)
+```
+
+## Coordinate reference system
+- The CRS specifies how the coordinates relate to locations on the earth.
+- The most common CRS is WGS 84, which is used by GPS and web mapping services.
+- The code for WGS 84 is 4326.
+- We will talk more about CRS next week.
+
+## Plotting `sf` objects
+We can plot `sf` objects using `geom_sf()`.
+```{webr}
+ggplot(a2housing_sf) + geom_sf(alpha = 0.1)
+```
+
+## Providing context
+```{r}
+library(ggspatial)
+filter(a2housing_sf, sale_price < 2e6) |>
+  ggplot() +  annotation_map_tile(type = "osm", zoom = 13) +
+  geom_sf(aes(color=sale_price), alpha = 0.1) +  scale_color_viridis_c()
+
+```
+  
+# Spatial autocorrelation
+  > Everything is related to everything else, but near things are more related than distant things.
+  - [Tobler's First Law of Geography](https://en.wikipedia.org/wiki/Tobler%27s_first_law_of_geography):
+
+##
+- Spatial autocorrelation is the correlation of a variable with itself through space.
+- In other words, it is the tendency for nearby locations to have similar values.
+
+## Visualizing spatial autocorrelation
+```{r}
+ggplot(a2housing_sf) + geom_sf(aes(color = log10(sale_price)), alpha = 0.5) + scale_color_viridis_c()
+```
+
+## Quantifying spatial autocorrelation
+- We can see that there is spatial autocorrelation in the housing prices.
+- "How correlated is my house price with my neighbor's?"
+- To quantify this we need to locate the nearest neighbors of each house.
+
+## Nearest neighbors
+- We can use the `st_nearest_feature()` function from the `sf` package to find the
+  nearest neighbor (in the dataset) of each house.
+```{r eval=F}
+a2housing_sf$nn <- st_nearest_feature(a2housing_sf)  # slow (why?)
+```
+
+## Nearest neighbors
+- The `nn` column contains the index of the nearest neighbor for each house.
+- For example, the nearest neighbor of the first house (index 1):
+```{webr}
+a2housing_sf$address[1]
+a2housing_sf$address[a2housing_sf$nn[1]]
+```
+
+## Correlation with nearest neighbor
+- We can compute the correlation between the sale price of each house and its nearest neighbor.
+```{webr}
+cor(a2housing_sf$sale_price, a2housing_sf$sale_price[a2housing_sf$nn], use = "complete.obs")
+```
+
+# Choropleth 
+- A choropleth is a map that uses colors to represent values in different regions.
+- We can create a choropleth of average housing prices by neighborhood.
+- To do this we need to define "neighborhoods"
+
+## Census tracts
+- The US Census Bureau divides the country into small geographic areas called census tracts.
+- Census tracts are designed to be relatively homogeneous in terms of population characteristics, economic status,
+  and living conditions.
+
+## Obtaining census tract data
+- Use the excellent `tidycensus` package to obtain census tract shapefiles.
+- Can also specific census variables (e.g. median hh income, `B19013_001`).
+```{r}
+library(tidycensus)
+a2tracts <- get_acs(geography = "tract", variables = "B19013_001", state = "MI", 
+                    county = "Washtenaw", geometry = TRUE)
+```
+
+## Plotting census tracts
+```{webr}
+ggplot(a2tracts) + geom_sf(aes(fill = estimate)) + scale_fill_viridis_c()
+```
+## Joining housing data to census tracts
+- If we want to summarize housing prices by census tract, we need to join the two datasets.
+- This is a new and special kind of join that we have not seen before: a spatial join.
+
+## Idea of spatial join
+```{r}
+ggplot() + 
+  geom_sf(data = a2housing_sf, aes(color = sale_price), alpha = 0.1) + 
+  geom_sf(data = a2tracts, fill = NA) +
+  scale_color_viridis_c() + 
+  xlim(c(-83.80, -83.65)) + ylim(c(42.22, 42.32))
+```
+
+## Spatial join
+- We can use the `st_join()` function from the `sf` package to perform a
+  spatial join.
+- This will join the attributes of the census tracts to the housing data based on location. 
+```{webr}
+st_join(a2housing_sf, a2tracts, join = st_within)
+```
+
+## 
+- Why did we get this error?
+- The two datasets have different coordinate reference systems (CRS).
+```{webr}
+st_crs(a2housing_sf)
+st_crs(a2tracts)
+```
+
+## Transforming CRS
+- We can use the `st_transform()` function to transform the CRS of one of the datasets
+- Let's transform `a2tracts` to the CRS of `a2housing_sf`
+```{r echo=T}
+(a2ht <- a2tracts |> st_transform(st_crs(a2housing_sf)) |> 
+   st_join(a2housing_sf, join = st_contains))
+```
+
+##
+
+```{webr}
+a2ht |> group_by(geometry) |> 
+  summarize(mean_price = mean(sale_price, na.rm = TRUE)) |>
+  ggplot() + geom_sf(aes(fill = mean_price)) + scale_fill_viridis_c()
+```
+
+## Learning more about `sf`
+`sf` has a good [cheat sheet](https://rstudio.github.io/cheatsheets/sf.pdf) which
+tells more about the neat things it can do.
+
