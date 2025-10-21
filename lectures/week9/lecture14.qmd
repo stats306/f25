@@ -1,0 +1,257 @@
+---
+title: "DATASCI 306"
+subtitle: "Lecture 14"
+format: live-revealjs
+engine: knitr
+resources:
+  - data/midwest.RData
+  - data/temps.rds
+  - data/poi.RData
+  
+webr:
+  packages:
+    - tidygeocoder
+    - terra
+    - tidyterra
+    - tidyverse
+    - sf
+    - fuzzyjoin
+---
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+library(tidyterra)
+library(sf)
+load("data/midwest.RData")
+load("data/poi.RData")
+theme_set(theme_classic())
+options(tigris_use_cache = TRUE)
+```
+```{webr}
+#| echo: false
+#| message: false
+#| warning: false
+#| autorun: true
+library(tidyverse)
+library(sf)
+library(terra)
+library(tidyterra)
+load("data/midwest.RData")
+load("data/poi.RData")
+theme_set(theme_classic())
+temps <- rast("data/temps.rds")
+sf_use_s2(False)
+```
+
+```{=html}
+<style>
+.qrcode img {
+  margin: 20px auto;
+}
+</style>
+```
+
+[https://ds306.org/lectures/week9/lecture14.html](https://ds306.org/lectures/week9/lecture14.html)
+
+# Where should I live?
+
+- Soon you will graduate college.
+- You may choose to live anywhere!
+- How to decide where?
+
+## Factors to consider
+
+- Cost of living
+- Job opportunities
+- Climate
+- Culture
+- ???
+
+## Results of Survey
+
+
+
+## Unemployment data
+
+- A [metropolitan area](https://www.census.gov/programs-surveys/metro-micro/about.html) is a region
+  that consists of a core city with a large population and its surrounding communities
+  that have a high degree of social and economic integration with the core city.
+- (When it is running) the U.S. government collects detailed unemployment data
+  for metropolitan areas: https://bls.gov/web/metro/laummtrk.htm
+
+## Unemployment data
+Use web scraping to download this table into R format: https://www.bls.gov/web/metro/laummtrk.htm
+
+```{webr}
+unemp_html <- rvest::read_html("data/laummtrk.htm")
+unemp_table <- unemp_html |> html_element("table") |> html_table()
+```
+
+## Cleanup table
+```{webr}
+unemp_table |> slice(3:391) |> rename("msa" = 1, "unemp_rate" = 2) |>
+  mutate(
+    unemp_rate = as.numeric(unemp_rate),
+  ) -> unemp_data
+```
+
+## Visualizing the data
+- Let's plot a map of metropolitan areas colored by unemployment rate.
+- (This map is too complex to do for all areas, so we'll focus on the upper Midwest.)
+```{webr}
+ggplot() + geom_sf(data=midwest_msas)
+```
+
+## Adding context
+Add state boundaries to the map for context.
+```{webr}
+ggplot() + geom_sf(data=midwest_msas) + geom_sf(data=midwest_states, fill=NA)
+```
+
+## Visualizing unemployment
+- Add unemployment data to the map.
+- Join the tables: how?
+```{webr}
+midwest_msas |> left_join(unemp_data, by=c("NAME"="msa"))
+```
+
+## Constructing join key
+- In `midwest_msas` they names are e.g. "Battle Creek, MI Metro Area"
+- In `unemp_data` they are e.g. "MI Battle Creek, MI Metropolitan Statistical Area"
+- We can construct a join key by removing suffixes and reordering.
+
+##
+```{webr}
+midwest_msas |> mutate(msa_name = NAME) -> midwest_msas2
+unemp_data |> mutate( msa_name = str_sub(msa, 1, -31)) |> print() -> unemp_data2
+```
+
+## Mapping unemployment
+```{webr}
+midwest_msas2 |> left_join(unemp_data2, by="msa_name") |> ggplot() +
+  geom_sf(aes(fill=unemp_rate)) +
+  geom_sf(data=midwest_states, fill=NA) +
+  scale_fill_viridis_c(option="plasma", na.value="grey90")
+```
+
+## Missing counties
+- We are missing some key areas, in particular Chicago.
+- What happened?
+```{webr}
+midwest_msas2 |> filter(str_detect(msa_name, "Chicago"))
+unemp_data2 |> filter(str_detect(msa, "Chicago"))
+```
+
+## Fuzzy join
+- The names are not exactly the same.
+- We can use a fuzzy join to match similar names.
+```{webr}
+library(fuzzyjoin)
+# join each entry in midwest_msa2 to the closest entry in unemp_data2
+midwest_msas2 |> stringdist_join(unemp_data2, by="msa_name", max_dist=5, distance_col="dist") |> 
+  group_by(NAME) |> slice_min(dist, n=1) |> ungroup() |> st_as_sf() -> midwest_msas3
+```
+
+##
+
+```{webr}
+midwest_msas3 |> ggplot() +
+  geom_sf(aes(fill=unemp_rate)) +
+  geom_sf(data=midwest_states, fill=NA) +
+  scale_fill_viridis_c(option="plasma", na.value="grey90")
+``` 
+
+# Climate
+- Many students consider climate when choosing where to live.
+- How can we incorporate climate data
+
+## Raster data
+![raster vs vector data](https://cartong.pages.gitlab.cartong.org/learning-corner/assets/images/toolbox9/3_3_key_concepts/3_3_3_vector_raster_data_7.png)
+
+## Loading raster data
+```{webr}
+library(terra)
+temps <- rast("data/temps.rds")
+plot(temps)
+```
+
+## Midwestern temps
+```{webr}
+# crop raster to midwest_states extent
+temps_midwest <- crop(temps, ext(midwest_states))
+ggplot() +
+  geom_spatraster(data=temps_midwest, aes(fill=tavg_jan)) +
+  scale_fill_viridis_c() +
+  geom_sf(data=midwest_states, fill=NA)
+```
+
+## Averaging a raster within a polygon
+- We can use the `extract()` function from the `terra` package to extract raster values within polygons.
+```{webr}
+temps_midwest |> terra::extract(midwest_msas3, fun=mean, na.rm=TRUE) -> msa_temps
+```
+
+##
+```{webr}
+midwest_msas3 |> 
+  cbind(msa_temps) |>
+  ggplot() + 
+  geom_sf(aes(fill=tavg_jun)) +
+  geom_sf(data=midwest_states, fill=NA) +
+  scale_fill_viridis_c()
+```
+
+# Distance to family & friends
+- Another factor to consider when choosing where to live is proximity to family and friends.
+- We can use spatial data to find locations that are close to multiple points of interest.
+
+## Example points
+```{r echo=T}
+library(tidygeocoder)
+poi <- tibble(
+  name = c("Ann Arbor, MI", "Chicago", "Pittsburgh, PA")
+) |> tidygeocoder::geocode(address = name, method = 'osm')
+```
+```{webr}
+poi
+```
+
+##
+![great circle distance](https://gisgeography.com/wp-content/uploads/2019/07/RhumbLine-GreatCircle-2.jpg)
+
+## Measuring distance on the earth
+- In math we learned about Euclidean distance. But this only works in flat spaces.
+- The earth is a sphere, so we need to use great-circle distance.
+
+## Calculating great-circle distance
+- Goal: For each location in the midwest, calculate the distance to each point of interest.
+- To do this, we'll make a grid of points covering the midwest.
+```{webr}
+midwest_bbox <- st_bbox(midwest_states)
+midwest_grid <- st_make_grid(midwest_states, cellsize=0.5) |> st_sf() |> st_centroid()
+```
+
+##
+
+```{webr}
+ggplot() +
+  geom_sf(data=midwest_states, fill=NA) +
+  geom_sf(data=midwest_grid, size=0.1)
+```
+
+## Calculating distances
+- We can use the `st_distance()` function from the `sf` package to calculate great
+  circle distances between points.
+  
+```{webr}
+r_template <- rast(ext(midwest_states), resolution = 0.1) # Adjust extent and resolution as needed
+v <- poi |> st_as_sf(coords=c("long", "lat"), crs=4326) |> vect()
+min_dist <- distance(r_template, v)
+```
+
+# Quiz question s
+1. The difference between Euclidean distance and great circle distances (check all that apply):
