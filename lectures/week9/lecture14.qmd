@@ -252,6 +252,3 @@ r_template <- rast(ext(midwest_states), resolution = 0.1) # Adjust extent and re
 v <- poi |> st_as_sf(coords=c("long", "lat"), crs=4326) |> vect()
 min_dist <- distance(r_template, v)
 ```
-
-# Quiz question s
-1. The difference between Euclidean distance and great circle distances (check all that apply):
