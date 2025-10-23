@@ -396,19 +396,3 @@ a2grid |> mutate(min_grocery_dist = min_grocery_dist) |>
 
 
 
-
-## Quiz questions
-
-1. How do walk scoring systems typically measure walkability?
-   - A) By calculating Euclidean distances to amenities.
-   - B) By calculating great-circle distances to amenities.
-   - C) By calculating walking distances along street networks to amenities.
-   - D) By counting the number of amenities within a fixed radius.
-   
-2. One reason why great-circle distance is not suitable for walk scoring is:
-   - A) It does not account for elevation changes.
-   - B) It assumes a flat Earth.
-   - C) It does not consider the actual paths people can take on streets and sidewalks.
-   - D) It is computationally intensive.
-   
-3. 
