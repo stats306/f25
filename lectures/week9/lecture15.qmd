@@ -1,0 +1,414 @@
+---
+title: "DATASCI 306"
+subtitle: "Lecture 15"
+format: live-revealjs
+engine: knitr
+resources:
+  - data/midwest.RData
+  - data/temps.rds
+  - data/poi.RData
+  - data/dp.RData
+  - data/a2landmarks.RData
+  - data/a2parks.RData
+  - data/vert.RData
+  - data/min_park_dist.RData
+  - data/a2grocery.RData
+webr:
+  packages:
+    - tidyverse
+    - sf
+    - geosphere
+---
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+library(tidyterra)
+library(sf)
+library(dodgr)
+library(ggspatial)
+load("data/midwest.RData")
+load("data/poi.RData")
+load("data/a2landmarks.RData")
+load("data/dp.RData")
+load("data/a2parks.RData")
+load("data/a2graph.RData")
+load("data/a2grocery.RData")
+theme_set(theme_classic())
+options(tigris_use_cache = TRUE)
+```
+```{webr}
+#| echo: false
+#| message: false
+#| warning: false
+#| autorun: true
+library(tidyverse)
+library(sf)
+library(terra)
+library(tidyterra)
+load("data/midwest.RData")
+load("data/poi.RData")
+load("data/a2landmarks.RData")
+load("data/dp.RData")
+load("data/a2parks.RData")
+load("data/vert.RData")
+load("data/min_park_dist.RData")
+load("data/a2grocery.RData")
+theme_set(theme_classic())
+sf_use_s2(FALSE)
+```
+
+```{=html}
+<style>
+.qrcode img {
+  margin: 20px auto;
+}
+</style>
+```
+
+[https://ds306.org/lectures/week9/lecture15.html](https://ds306.org/lectures/week9/lecture15.html)
+
+
+# Walk scoring
+
+- Goal: Calculate walk scores based on distance to points of interest (POI) such as grocery stores, parks, schools, etc.
+- Data: Locations of POIs with latitude and longitude coordinates.
+
+## Measuring distances
+Last lecture we learned how to measure distance in two ways:
+
+- Euclidean distance: $\sqrt{(x_2 - x_1)^2 + (y_2 - y_1)^2}$
+- Great-circle distance: shortest path along Earth's surface.
+
+## Measuring distances
+
+```{webr}
+a2landmarks <- tribble(
+  ~name, ~lat, ~long,
+  "CHEM1400", 42.27847635024672, -83.73700902678496,
+  "The Big House", 42.26601908368355, -83.7487063315362,
+  "Diag", 42.27708990934726, -83.73817826048145,
+  "North Campus", 42.29666404150472, -83.71033250016994,
+  "The Arb", 42.28105377389016, -83.72566111988131
+  )
+a2landmarks_sf <- a2landmarks |> st_as_sf(coords = c("long", "lat"), crs = 4326)
+```
+
+## 
+
+```{r}
+#| echo: true
+#| messages: false
+a2landmarks_sf <- a2landmarks |> st_as_sf(coords = c("long", "lat"), crs = 4326)
+a2landmarks_sf |> st_as_sf(coords = c("long", "lat"), crs = 4326) |>
+  ggplot() + annotation_map_tile(zoom=14) + geom_sf(color="red") +
+  # add place labels 
+  geom_sf_text(aes(label=name), nudge_y = 0.001)
+```
+  
+## Measuring distances
+
+To measure the great circle distance, we use `st_distance`:
+
+```{r}
+#| echo: true
+a2landmarks_sf |> st_distance() 
+```
+
+## Drawing great circle arcs
+
+```{webr}
+# use gcIntermediate then convert to an SF 
+library(geosphere)
+arcs <- geosphere::gcIntermediate(
+  p1 = cbind(a2landmarks$long, a2landmarks$lat)[1, ],
+  p2 = cbind(a2landmarks$long, a2landmarks$lat)[2, ],
+  n = 50, addStartEnd = TRUE, sp = TRUE
+) |> st_as_sf()
+```
+
+
+##
+
+```{webr}
+#| warning: false
+ggplot() + geom_sf(data=arcs, color="blue", size=1) +
+  geom_sf_text(data=a2landmarks_sf, aes(label=name), nudge_y = 0.001)
+```
+
+##
+
+```{r}
+#! echo: false
+#| messages: false
+#| warning: false
+ggplot() + 
+  annotation_map_tile(zoom=14) +
+  geom_sf(data=arcs, color="blue", size=1) +
+  geom_sf_text(data=a2landmarks_sf, aes(label=name), nudge_y = 0.001) 
+```
+
+## Differences at large scale
+
+```{webr}
+# plot gc dist between ann arbor and the eiffel tower
+library(ggspatial)
+arcs2 <- geosphere::gcIntermediate(
+  # ann arbor
+  p1 = cbind(a2landmarks$long, a2landmarks$lat)[1, ],
+  # eiffel tower
+  p2 = c(2.2945, 48.8584),
+  n = 500, addStartEnd = TRUE, sp = TRUE
+) |> st_as_sf()
+ggplot() + geom_sf(data=arcs2, color="blue", size=1) 
+```
+## 
+
+```{r}
+#| echo: false
+#| messages: false
+#| warning: false
+# plot gc dist between ann arbor and the eiffel tower
+library(ggspatial)
+arcs2 <- geosphere::gcIntermediate(
+  # ann arbor
+  p1 = cbind(a2landmarks$long, a2landmarks$lat)[1, ],
+  # eiffel tower
+  p2 = c(2.2945, 48.8584),
+  n = 500, addStartEnd = TRUE, sp = TRUE
+) |> st_as_sf()
+ggplot() + geom_sf(data=arcs2, color="blue", size=1) 
+```
+
+# Walking distance
+
+```{r}
+#| echo: false
+#| messages: false
+#| warning: false
+#| eval: true
+# use gcIntermediate then convert to an SF 
+geosphere::gcIntermediate(
+  p1 = cbind(a2landmarks$long, a2landmarks$lat)[1, ],  # CHEM1400
+  p2 = cbind(a2landmarks$long, a2landmarks$lat)[4, ],  # North Campus
+  n = 50, addStartEnd = TRUE, sp = TRUE
+) |> st_as_sf() |> ggplot() + 
+  annotation_map_tile(zoom=14) +
+  geom_sf(color="blue", size=1) +
+  geom_sf_text(data=a2landmarks_sf, aes(label=name), nudge_y = 0.001)
+```
+
+
+# Walking distance
+
+To measure walking distance we need:
+- A dataset of streets, sidewalks, and paths;
+- A way to calculate shortest paths along the street network
+
+## Street network data
+- [OpenStreetMap (OSM)](https://www.openstreetmap.org/#map=16/42.28098/-83.74897) is a free, open-source map of the world created by volunteers.
+- We can download street network data from OSM using the `osmdata` R package or other tools.
+
+##
+
+```{webr}
+ggplot(a2walk) + geom_sf(color="brown")
+```
+
+## 
+
+```{r}
+ggplot(a2walk) + annotation_map_tile(zoom=13) + geom_sf(color="brown")
+```
+
+## Walking from the diag to North Campus
+- Using a [mapping application](https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=42.2771027%2C-83.7380139%3B42.2942142%2C-83.7100389#map=15/42.28460/-83.72394) route from the Diag to North Campus is about 3.l km and takes about 39 minutes to walk.
+- How to find the best route?
+
+##
+
+```{r}
+a2landmarks_sf |> filter(name %in% c("Diag", "North Campus")) |>
+ggplot() + geom_sf(data=st_crop(a2walk, st_bbox(a2landmarks_sf))) + geom_sf(color="red", size=5) +
+  geom_sf_text(aes(label=name), nudge_y = 0.001)
+```
+
+## Routing algorithm
+- We'll use `dodgr` package to calculate shortest paths along the street network.
+- CS nerd stuff:
+  - Technically this is solving a graph theory problem called ["shortest path"](https://en.wikipedia.org/wiki/Shortest_path_problem).
+  - Dijkstra's algorithm is a classic algorithm for solving shortest path problems on graphs with non-negative edge weights.
+  
+  
+##  Finding a shortest path using `dodgr`
+
+```{r}
+#| eval: false
+#| echo: true
+# diag to north campus
+diag = a2landmarks[3, c("lat", "long")]
+north_campus = a2landmarks[4, c("lat", "long")]
+# solve the routing problem; result is a list of vertices
+dp <- dodgr_paths(a2graph_w, from = diag, to = north_campus)
+verts <- dodgr_vertices(a2graph_w)
+path1 <- verts [match (dp [[1]] [[1]], verts$id), ]
+```
+
+##
+
+```{r}
+st_as_sf(path1, coords = c("x", "y"), crs = 4326) |> 
+  ggplot() +  annotation_map_tile(zoom=14) + geom_sf(color="blue", size=1)
+```
+
+## Creating a line
+```{webr}
+st_as_sf(path1, coords = c("x", "y"), crs = 4326) |> st_combine() |> 
+  st_cast("LINESTRING") |>
+  ggplot() + geom_sf(color="blue", size=1)
+```
+
+## 
+```{r}
+#| echo: false
+st_as_sf(path1, coords = c("x", "y"), crs = 4326) |> st_combine() |> 
+  st_cast("LINESTRING") |>
+  ggplot() + annotation_map_tile(zoom=14) +
+  geom_sf(color="blue", size=1)
+```
+
+# Measuring walking distance to amenities
+Now that we know how to measure walking distance, we can calculate walk scores based on distance to points of interest (POI) such as grocery stores, parks, schools, etc.
+
+## Parks in Ann Arbor
+Ann Arbor has >160 parks, helpfully mapped by the city government and released to the public.
+
+```{webr}
+ggplot(a2parks) + geom_sf(data=a2walk) + geom_sf(fill="green")
+```
+
+
+## Walking distance from a point to a park
+```{r}
+#| echo: true
+#| warning: false
+# pick a point in Ann Arbor
+chem1400 <- a2landmarks |> filter(name == "CHEM1400") |> select(y=lat, x=long)
+# pick a park
+park <- a2parks |> filter(NAME == "Gallup Park") |> st_centroid() |> st_coordinates()
+# calculate walking distance
+vert <- dodgr_vertices(a2graph_w)
+chem_to_park <- dodgr_paths(a2graph_w, from = park, to = chem1400)
+```
+
+## Is this correct?
+```{r}
+chem_park_path <- vert [match (chem_to_park [[1]] [[1]], vert$id), ]
+st_as_sf(chem_park_path, coords = c("x", "y"), crs = 4326) |> st_combine() |> 
+  st_cast("LINESTRING") |> ggplot() + annotation_map_tile() + geom_sf(color="blue", size=1)
+```
+
+## What happened?
+
+```{webr}
+a2parks
+```
+
+## Corrected walking distance
+```{r}
+# pick a point in Ann Arbor
+chem1400 <- a2landmarks |> filter(name == "CHEM1400") |> select(y=lat, x=long)
+# pick a park
+park <- a2parks |> filter(NAME == "Gallup Park") |> st_transform(4326) |> st_centroid() |> st_coordinates()
+# calculate walking distance
+vert <- dodgr_vertices(a2graph_w)
+chem_to_park <- dodgr_paths(a2graph_w, from = park, to = chem1400)
+```
+
+## Corrected plot
+
+```{r}
+#| echo: false
+chem_park_path <- vert [match (chem_to_park [[1]] [[1]], vert$id), ]
+st_as_sf(chem_park_path, coords = c("x", "y"), crs = 4326) |> st_combine() |> 
+  st_cast("LINESTRING") |> ggplot() + annotation_map_tile() + geom_sf(color="blue", size=1)
+```
+
+## Plotting the distance to the nearest park
+
+```{r}
+#| message: false
+#| warning: false
+a2grid <- st_make_grid(st_transform(a2parks, 4326), cellsize=0.001) |> st_sf()
+a2grid_coords <- a2grid |> st_centroid() |> st_coordinates()
+park_coords <- a2parks |> st_transform(4326) |> st_centroid() |> st_coordinates()
+a2grid_dist <- dodgr_distances(a2graph_w, from = a2grid_coords[, c("X", "Y")], to = park_coords)
+min_park_dist <- apply(a2grid_dist, 1, function(x) min(x, na.rm=T))
+```
+
+##
+```{webr}
+a2grid |> mutate(min_park_dist = min_park_dist) |>
+  ggplot() + geom_sf(aes(fill=min_park_dist), color=NA) + 
+  scale_fill_viridis_c()
+```
+
+## Walkability to other amenities
+Grocery stores:
+```{r}
+#| eval: false
+#| echo: true
+library(osmdata)
+a2bb <- getbb("Ann Arbor, MI")
+query_bbox <- opq(bbox = a2bb) %>%
+  add_osm_feature(key = "shop", value = c("supermarket", "grocery"))
+a2_grocery_stores <- osmdata_sf(query_bbox)
+```
+
+##
+
+```{webr}
+ggplot(a2grocery) +  geom_sf(a2walk, color="brown") + geom_sf(color="orange", size=3)
+```
+
+## Walk distance to nearest grocery store
+
+```{r}
+#| message: false
+#| warning: false
+#| eval: true
+a2grocery_coords <- a2grocery |> st_transform(4326) |> st_coordinates()
+a2grid_dist_grocery <- dodgr_distances(a2graph_w, from = a2grid_coords, to = a2grocery_coords)
+min_grocery_dist <- apply(a2grid_dist_grocery, 1, function(x) min(x, na.rm=T))
+```
+
+##
+
+```{r}
+#| message: false
+a2grid |> mutate(min_grocery_dist = min_grocery_dist) |>
+  ggplot() +  annotation_map_tile(zoom=13) +
+  geom_sf(aes(fill=min_grocery_dist), color=NA, alpha=.9)
+```
+
+
+
+
+## Quiz questions
+
+1. How do walk scoring systems typically measure walkability?
+   - A) By calculating Euclidean distances to amenities.
+   - B) By calculating great-circle distances to amenities.
+   - C) By calculating walking distances along street networks to amenities.
+   - D) By counting the number of amenities within a fixed radius.
+   
+2. One reason why great-circle distance is not suitable for walk scoring is:
+   - A) It does not account for elevation changes.
+   - B) It assumes a flat Earth.
+   - C) It does not consider the actual paths people can take on streets and sidewalks.
+   - D) It is computationally intensive.
+   
+3. 
