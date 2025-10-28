@@ -6,7 +6,6 @@ format: live-revealjs
 engine: knitr
 resources:
   - data/nhanes.RData
-  - data/grades306.RData
   - data/suicide.RData
   - data/ucb.RData
   - data/a2pp.RData
