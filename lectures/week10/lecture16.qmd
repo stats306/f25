@@ -1,0 +1,279 @@
+---
+title: "DATASCI 306"
+subtitle: "Lecture 15"
+author: "[https://ds306.org/lectures/week10/lecture16.html](https://ds306.org/lectures/week10/lecture16.html)"
+format: live-revealjs
+engine: knitr
+resources:
+  - data/nhanes.RData
+  - data/grades306.RData
+  - data/suicide.RData
+  - data/ucb.RData
+  - data/a2pp.RData
+webr:
+  packages:
+    - tidyverse
+    - ggthemes
+    - NHANES
+---
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+# Recent trends in mental health
+
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+library(NHANES)
+library(ggthemes)
+load("data/nhanes.RData")
+load("data/suicide.RData")
+load("data/ucb.RData")
+theme_set(theme_tufte())
+```
+```{webr}
+#| echo: false
+#| message: false
+#| warning: false
+#| autorun: true
+library(tidyverse)
+library(NHANES)
+library(ggthemes)
+load("data/nhanes.RData")
+load("data/suicide.RData")
+load("data/ucb.RData")
+theme_set(theme_tufte())
+```
+
+
+## The data
+
+- [**NHANES**](https://www.cdc.gov/nchs/nhanes/index.htm) stands for the National Health and Nutrition Examination Survey.
+- Series of studies designed to assess the health and nutritional status of adults and children in the United States.
+- Conducted by the National Center for Health Statistics (NCHS), part of the Centers for Disease Control and Prevention (CDC).
+
+## How NHANES Works
+
+- NHANES combines interviews and physical examinations.
+- The interview includes demographic, socioeconomic, dietary, and health-related questions.
+- The examination part includes medical, dental, and physiological measurements, as well as laboratory tests administered by medical personnel.
+- NHANES data is collected in 2-year cycles and released in public-use data files.
+
+## Depression Screening in NHANES
+- NHANES includes a depression screening questionnaire known as the Patient Health Questionnaire-9 (PHQ-9).
+- The PHQ-9 consists of 9 questions that assess the frequency of depressive symptoms over the past two weeks.
+- Each question is scored from 0 (not at all) to 3 (nearly every day), resulting in a total score ranging from 0 to 27.
+
+## Cross-sectional data
+`nhanes_dpq` contains data from multiple NHANES cycles, including demographic information and responses to the depression questionnaire.
+```{webr}
+nhanes_dpq
+```
+
+## Calculating depression scores
+- [PHQ-9](https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2021/DataFiles/DPQ_L.htm) is a widely used tool for monitoring and measuring the severity of depression.
+- It consists of nine questions that assess the frequency of depressive symptoms over the past two weeks.
+- Each question is scored from 0 (not at all) to 3 (nearly every day), resulting in a total score ranging from 0 to 27.
+- A common threshold for indicating depression is a score of 10 or higher.
+
+## PHQ-9 in NHANES
+```{r}
+nhanes_dpq |> select(starts_with("DPQ"))
+```
+
+## Constructing PHQ-9
+```{webr}
+dep2score <- function(x) {
+  case_match(as.integer(x),
+    1 ~ 0,
+    2 ~ 1,
+    3 ~ 2,
+    4 ~ 3,
+    .default = NA_integer_
+  )
+}
+```
+
+## Operating across rows: `rowwise()`
+We'll use new dplyr verbs, `across` and `rowwise()`, to operate across rows.
+
+```{webr}
+nhanes_dpq |> sample_n(1000) |>
+  filter(!is.na(DPQ010)) |>
+  mutate(across(starts_with("DPQ"), dep2score)) |>
+  rowwise() |>
+  mutate(DepScore = sum(c_across(DPQ010:DPQ090), na.rm=TRUE),
+         Depressed = DepScore >= 10) |>
+  ungroup()
+```
+
+## Trends in depression over time
+```{webr}
+nhanes_dpq1 |> 
+  mutate(year = as.integer(str_extract(SDDSRVYR, "\\d+"))) |> 
+  group_by(year, RIDAGEYR) |> 
+  summarise(mean_dep = weighted.mean(DepScore, WTINT2YR, na.rm=TRUE), n=n()) |>
+  ggplot(aes(x=year, y=mean_dep, color=as.factor(RIDAGEYR))) + geom_line()
+```
+
+##
+```{r}
+#| warning: false
+#| message: false
+nhanes_dpq1 |> 
+  mutate(year = as.integer(str_extract(SDDSRVYR, "\\d+"))) |> 
+  group_by(year, RIDAGEYR) |> 
+  summarise(mean_dep = weighted.mean(DepScore, WTINT2YR, na.rm=TRUE), n=n()) |>
+  ggplot(aes(x=year, y=mean_dep, color=as.factor(RIDAGEYR))) + geom_line() +
+  labs(x="Year", y="Mean Depression Score", color="Age") +
+  ggtitle("Trends in Depression Scores Over Time by Age Group")
+```
+
+## Grouping a factor
+
+```{webr}
+(p <- nhanes_dpq1 |> 
+  mutate(year = as.integer(str_extract(SDDSRVYR, "\\d+")),
+         age_grp = cut(RIDAGEYR, 
+                       breaks = c(-1, 17, 30, 45, 60, 120), 
+                       labels = c("0-17", "18-29", "30-44", "45-59", "60+"))) |> 
+  group_by(year, age_grp) |> 
+  summarise(mean_dep = weighted.mean(DepScore, WTINT2YR, na.rm=TRUE), n=n()) |>
+  ggplot(aes(x=year, y=mean_dep, color=age_grp)) + geom_line())
+```
+
+## 
+
+```{r}
+nhanes_dpq1 |> 
+  mutate(year = as.integer(str_extract(SDDSRVYR, "\\d+")),
+         age_grp = cut(RIDAGEYR, 
+                       breaks = c(-1, 17, 30, 45, 60, 120), 
+                       labels = c("0-17", "18-29", "30-44", "45-59", "60+"))) |> 
+  group_by(year, age_grp) |> 
+  summarise(mean_dep = weighted.mean(DepScore, WTINT2YR, na.rm=TRUE), n=n()) |>
+  ggplot(aes(x=year, y=mean_dep, color=age_grp)) + geom_line() +
+  labs(x="Year", y="Mean Depression Score", color="Age Group") +
+  ggtitle("Trends in Depression Scores Over Time by Age Group")
+```
+
+
+## Youth suicide
+[WISQARS](https://wisqars.cdc.gov/reports/?o=MORT&y1=2001&y2=2023&t=0&i=2&m=20810&g=00&me=0&s=0&r=0&ry=0&e=0&yp=65&a=5Yr&g1=10&g2=25&a1=0&a2=199&r1=YEAR&r2=AGEGP&r3=NONE&r4=NONE) (Web-based Injury Statistics Query and Reporting System) from the CDC provides data on 
+injury-related deaths, including suicides, in the United States.
+```{webr}
+suicide
+```
+
+## Rates of suicide over time
+```{webr}
+#| warning: false
+#| message: false
+(p <- ggplot(suicide) + 
+  geom_line(aes(x = as.integer(Year), y = `Crude Rate`, color = `Age Group`)))
+```
+
+## 
+How much did suicide rates increase from 2010-2020?
+```{webr}
+suicide |> filter(Year %in% c("2010", "2020", "2023")) |> 
+  select(`Age Group`, `Year`, `Crude Rate`) |>
+  pivot_wider(names_from=Year, values_from=`Crude Rate`) |>
+  mutate(percent_inc = `2020` / `2010` * 100 - 100) ->
+  pct_inc
+```
+
+## Annotate the plot to make it more impactful
+```{webr}
+#| warning: false
+#| message: false
+p + geom_text(data=pct_inc, 
+  aes(y=`2023`, color=`Age Group`, label=paste0("+", round(percent_inc, 2), "%")),
+  x=2024.2) + xlim(c(2000, 2025))
+```
+
+# Why are rates of suicide and depression increasing, especially amongst the young?
+
+## Correlation and causation
+- We all know what "$X$ is correlated with $Y$" means.
+- What does "$X$ causes $Y$" mean?
+
+## Causality in statistics
+- Causality means that changes in one variable (the cause) directly lead to changes in another variable (the effect).
+- Examples: 
+  - "standing in the rain" causes "getting wet"
+  - "jogging" causes "increased heart rate"
+  
+## Non-examples
+- "drinking red wine" ~~causes~~ [may be correlated with](https://www.heart.org/en/news/2019/05/24/drinking-red-wine-for-heart-health-read-this-before-you-toast) "less risk of heart disease"
+- "Mediterranean diet" ~~causes~~ [is correlated with](https://pmc.ncbi.nlm.nih.gov/articles/PMC5902736/) "living longer"
+
+## Spurious correlations
+
+[![margarine in Maine](https://www.tylervigen.com/spurious/correlation/image/5920_per-capita-consumption-of-margarine_correlates-with_the-divorce-rate-in-maine.png)](https://www.tylervigen.com/spurious/correlation/5920_per-capita-consumption-of-margarine_correlates-with_the-divorce-rate-in-maine)
+
+## My favorite
+- `a2.income`: Median HH income in Ann Arbor
+- `para.pop`: Population of Paraguay
+
+```{webr}
+load('data/a2pp.RData')
+a2i.pp
+```
+
+## Establishing causality is difficult
+- Unlike correlation, which can be directly observed from data, establishing causality is really difficult.
+- Let's see an example, again from NHANES.
+
+# Does money cause happiness?
+```{webr}
+NHANES |> lm(as.integer(Depressed) ~ HHIncomeMid, data=_) |> summary()
+```
+
+## Wealthier people sleep more
+```{webr}
+NHANES |> lm(SleepHrsNight ~ HHIncomeMid, data=_) |> summary()
+```
+
+##  Wealthier people are in better shape
+```{webr}
+NHANES |> lm(BMI ~ HHIncomeMid, data=_) |> summary()
+```
+
+## Wealthier people are less likely to smoke
+```{webr}
+NHANES |> mutate(smoke = Smoke100 == "Yes") |> lm(smoke ~ HHIncomeMid, data=_) |> summary()
+```
+
+## The challenge of proving that wealth causes happiness
+- When I condition on the wealth level, I'm also conditioning on all the other factors
+  that are also correlated with wealth.
+- It's impossible to isolate the effect of wealth on happiness from observational data.
+- The extra factors that are correlated with both wealth and happiness are called **confounders**.
+
+## Famous example of confounding
+In the 1970s UC Berkeley was sued for gender bias in admissions to its graduate programs.
+```{webr}
+ucb1
+```
+## Omitted variable bias
+- The overall data shows a bias against women.
+- But: there is another variable lurking in the background: the choice of department.
+- Some departments are more competitive than others.
+- Women tend to apply to more competitive departments.
+
+##
+```{webr}
+UCBAdmissions |> apply(3, prop.test)
+```
+
+## Simpson's paradox
+(When the trend appears in several different groups of data but disappears or reverses when these groups are combined.)
+```{r}
+ucbt <- UCBAdmissions |> as_tibble() |> pivot_wider(names_from=Admit, values_from=n)
+ucbt |> group_by(Gender) |> summarize(Admitted = sum(Admitted), Rejected = sum(Rejected)) |>
+  mutate(Dept = "Overall") |> bind_rows(ucbt) |>
+  mutate(admit_rate = Admitted / (Admitted + Rejected)) |>
+  ggplot() + geom_line(aes(x=Gender, y=admit_rate, group=Dept, color=Dept))
+```
