@@ -1,0 +1,588 @@
+---
+title: "DATASCI 306"
+subtitle: "Lecture 18"
+author: "[https://ds306.org/lectures/week11/lecture18.html](https://ds306.org/lectures/week11/lecture18.html)"
+format: live-revealjs
+engine: knitr
+webr:
+  packages:
+    - tidyverse
+---
+
+# Power and effect size
+
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+```{webr}
+#| echo: false
+#| message: false
+#| warning: false
+#| autorun: true
+library(tidyverse)
+```
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+plot_curves <- function(mean1, mean2, sd1=1, sd2=1, obs=NA, xlim=NULL) {
+  x <- seq(min(mean1, mean2) - 4 * sd1, max(mean1, mean2) + 4 * sd2, length.out = 500)
+  y1 <- dnorm(x, mean = mean1, sd = sd1)
+  y2 <- dnorm(x, mean = mean2, sd = sd2)
+  
+  # Plot first density
+  plot(x, y1, type = "n", xlim = xlim, ylim = c(0, dnorm(mean2, mean = mean2, sd = sd2) * 1.1),
+       xlab = "Value", ylab = "Density", main = "Which distribution generated our data?")
+  
+  # Shade areas
+  polygon(c(x, rev(x)), c(y1, rep(0, length(x))), col = rgb(1, 0, 0, 0.4), border = NA)
+  polygon(c(x, rev(x)), c(y2, rep(0, length(x))), col = rgb(0, 0, 1, 0.4), border = NA)
+  
+  # Outline curves
+  lines(x, y1, lwd = 2, col = "red")
+  lines(x, y2, lwd = 2, col = "blue")
+  
+  # Example sample data point
+  if (! is.na(obs)) {
+    abline(v = obs, col = "darkgreen", lwd = 2, lty = 2)
+  }
+  
+  # Legend
+  legend("topright", legend = c(expression(H[0]), expression(H[1])),
+         fill = c(rgb(1, 0, 0, 0.4), rgb(0, 0, 1, 0.4)),
+         border = c("red", "blue"))
+}
+```
+
+## Forecasting an election
+- It's election day and New Yorkers are voting for mayor.
+- How many voters do I need to survey to have a good chance correctly predicting the outcome?
+$$
+\begin{align}
+H_0 &: p_\text{Mamdani} \leq 0.5 \\
+H_a &: p_\text{Mamdani} > 0.5
+\end{align}
+
+## Testing a new website
+
+You graduate a work for a tech firm. Your team has designed a new website layout that they believe will increase user engagement. $$
+\begin{align}
+H_0 &: \text{new engagement} \leq \text{old engagement} \\
+H_a &: \text{new engagement} > \text{old engagement}
+\end{align}
+$$
+
+## Testing a new drug
+
+A pharmaceutical company has developed a new drug to lower blood pressure. They want to test if the new drug is effective: $$
+\begin{align}
+H_0 &: \text{mean BP reduction} \leq 0 \\
+H_a &: \text{mean BP reduction} > 0
+\end{align}
+$$
+
+## Types of statistical error
+
+-   Type I error: I incorrectly reject the null hypothesis (false positive)
+-   Type II error: I incorrectly fail to reject the null hypothesis (false negative)
+
+## Power
+
+-   Power: 1 - (Type II error rate), i.e. my ability to correctly reject the null hypothesis when it is false
+-   Power and Type I error rate are **inversely related**: as one goes up, the other goes down
+
+## Why care about type I error?
+
+-   Generally, we set $H_0$ to be the "status quo" or "no effect".
+-   Type I error means we are incorrectly concluding that there is an effect when there is none.
+
+## Why care about power?
+
+-   If I run an under-powered study, there is no chance of detecting an effect even if one exists.
+-   This wastes money and also potentially harms people (e.g. if a drug is effective but I fail to detect it).
+-   That is why e.g. the FDA requires [power analyses for clinical trials](https://www.fda.gov/regulatory-information/search-fda-guidance-documents/e9-statistical-principles-clinical-trials).
+
+# Review of hypothesis testing
+
+```{r}
+#| echo: false
+plot_curves(mean1=0, mean2=1, sd1=1, sd2=1)
+```
+
+## Critical region
+
+-   I reject $H_0$ when my observed data falls in the **critical region**.
+-   For a two-sided test with $\alpha=0.05$, the critical region is the extreme 2.5% tails of the null distribution.
+
+## Type-1 error
+
+```{r}
+#| echo: false
+#| eval: true
+mean1 = 0
+mean2 = 1
+sd1 = 1
+sd2 = 1
+x <- seq(min(mean1, mean2) - 4 * sd1, max(mean1, mean2) + 4 * sd2, length.out = 500)
+y1 <- dnorm(x, mean = mean1, sd = sd1)
+y2 <- dnorm(x, mean = mean2, sd = sd2)
+xlim = NULL
+
+# Plot first density
+plot(x, y1, type = "n", xlim = xlim, ylim = c(0, dnorm(mean2, mean = mean2, sd = sd2) * 1.1),
+     xlab = "Value", ylab = "Density", main = "Critical region")
+
+# Shade areas
+polygon(c(x, rev(x)), c(y1, rep(0, length(x))), col = rgb(1, 0, 0, 0.4), border = NA)
+polygon(c(x, rev(x)), c(y2, rep(0, length(x))), col = rgb(0, 0, 1, 0.05), border = NA)
+
+# Outline curves
+lines(x, y1, lwd = 2, col = "red")
+lines(x, y2, lwd = 2, col = rgb(0, 0, 1, 0.1))
+
+
+# Shade rejection region under H0 (right tail)
+alpha = 0.05
+crit <- qnorm(1 - alpha/2, mean = mean1, sd = sd1)
+# Example sample data point
+
+
+# Legend
+legend("topright", legend = c(expression(H[0]), expression(H[1])),
+       fill = c(rgb(1, 0, 0, 0.4), rgb(0, 0, 1, 0.4)),
+       border = c("red", "blue"))
+# plot criticial region
+
+```
+
+## Type-1 error
+
+```{r}
+#| echo: false
+#| eval: true
+mean1 = 0
+mean2 = 1
+sd1 = 1
+sd2 = 1
+x <- seq(min(mean1, mean2) - 4 * sd1, max(mean1, mean2) + 4 * sd2, length.out = 500)
+y1 <- dnorm(x, mean = mean1, sd = sd1)
+y2 <- dnorm(x, mean = mean2, sd = sd2)
+xlim = NULL
+
+# Plot first density
+plot(x, y1, type = "n", xlim = xlim, ylim = c(0, dnorm(mean2, mean = mean2, sd = sd2) * 1.1),
+     xlab = "Value", ylab = "Density", main = "Critical region")
+
+# Shade areas
+polygon(c(x, rev(x)), c(y1, rep(0, length(x))), col = rgb(1, 0, 0, 0.4), border = NA)
+polygon(c(x, rev(x)), c(y2, rep(0, length(x))), col = rgb(0, 0, 1, 0.05), border = NA)
+
+# Outline curves
+lines(x, y1, lwd = 2, col = "red")
+lines(x, y2, lwd = 2, col = rgb(0, 0, 1, 0.1))
+
+
+# Shade rejection region under H0 (right tail)
+alpha = 0.05
+crit <- qnorm(1 - alpha/2, mean = mean1, sd = sd1)
+x_tail <- x[x > crit]
+polygon(c(crit, x_tail, max(x_tail)),
+        c(0, dnorm(x_tail, 0, 1), 0),
+        col = adjustcolor("red", 0.6), border = NA)
+        
+x_tail <- x[x < (-crit)]
+polygon(c(crit, x_tail, max(x_tail)),
+        c(0, dnorm(x_tail, 0, 1), 0),
+        col = adjustcolor("red", 0.6), border = NA)
+# Example sample data point
+
+# Legend
+legend("topright", legend = c(expression(H[0]), expression(H[1])),
+       fill = c(rgb(1, 0, 0, 0.4), rgb(0, 0, 1, 0.4)),
+       border = c("red", "blue"))
+# plot criticial region
+
+```
+
+## Power
+
+```{r}
+#| echo: false
+#| eval: true
+mean1 = 0
+mean2 = 1
+sd1 = 1
+sd2 = 1
+x <- seq(min(mean1, mean2) - 4 * sd1, max(mean1, mean2) + 4 * sd2, length.out = 500)
+y1 <- dnorm(x, mean = mean1, sd = sd1)
+y2 <- dnorm(x, mean = mean2, sd = sd2)
+xlim = NULL
+
+# Plot first density
+plot(x, y1, type = "n", xlim = xlim, ylim = c(0, dnorm(mean2, mean = mean2, sd = sd2) * 1.1),
+     xlab = "Value", ylab = "Density", main = "Power")
+
+# Shade areas
+polygon(c(x, rev(x)), c(y1, rep(0, length(x))), col = rgb(1, 0, 0, 0.05), border = NA)
+polygon(c(x, rev(x)), c(y2, rep(0, length(x))), col = rgb(0, 0, 1, 0.4), border = NA)
+
+# Outline curves
+lines(x, y1, lwd = 2, col = rgb(1, 0, 0, 0.1))
+lines(x, y2, lwd = 2, col = rgb(0, 0, 1, 1.0))
+
+
+# Shade rejection region under H0 (right tail)
+alpha = 0.05
+crit <- qnorm(1 - alpha/2, mean = mean1, sd = sd1)
+x_tail <- x[x > crit]
+polygon(c(crit, x_tail, max(x_tail)),
+        c(0, dnorm(x_tail, 0, 1), 0),
+        col = adjustcolor("red", 0.1), border = NA)
+        
+x_tail <- x[x < (-crit)]
+polygon(c(crit, x_tail, max(x_tail)),
+        c(0, dnorm(x_tail, 0, 1), 0),
+        col = adjustcolor("red", 0.1), border = NA)
+# Example sample data point
+
+# Legend
+legend("topright", legend = c(expression(H[0]), expression(H[1])),
+       fill = c(rgb(1, 0, 0, 0.4), rgb(0, 0, 1, 0.4)),
+       border = c("red", "blue"))
+# plot criticial region
+```
+
+## Power
+
+```{r}
+#| echo: false
+#| eval: true
+mean1 = 0
+mean2 = 1
+sd1 = 1
+sd2 = 1
+x <- seq(min(mean1, mean2) - 4 * sd1, max(mean1, mean2) + 4 * sd2, length.out = 500)
+y1 <- dnorm(x, mean = mean1, sd = sd1)
+y2 <- dnorm(x, mean = mean2, sd = sd2)
+xlim = NULL
+
+# Plot first density
+plot(x, y1, type = "n", xlim = xlim, ylim = c(0, dnorm(mean2, mean = mean2, sd = sd2) * 1.1),
+     xlab = "Value", ylab = "Density", main = "Power")
+
+# Shade areas
+polygon(c(x, rev(x)), c(y1, rep(0, length(x))), col = rgb(1, 0, 0, 0.05), border = NA)
+polygon(c(x, rev(x)), c(y2, rep(0, length(x))), col = rgb(0, 0, 1, 0.4), border = NA)
+
+# Outline curves
+lines(x, y1, lwd = 2, col = rgb(1, 0, 0, 0.1))
+lines(x, y2, lwd = 2, col = rgb(0, 0, 1, 1.0))
+
+
+# Shade rejection region under H0 (right tail)
+alpha = 0.05
+crit <- qnorm(1 - alpha/2, mean = mean1, sd = sd1)
+x_tail <- x[x > crit]
+polygon(c(crit, x_tail, max(x_tail)),
+        c(0, dnorm(x_tail, 0, 1), 0),
+        col = adjustcolor("red", 0.1), border = NA)
+        
+x_tail <- x[x < (-crit)]
+polygon(c(crit, x_tail, max(x_tail)),
+        c(0, dnorm(x_tail, 0, 1), 0),
+        col = adjustcolor("red", 0.1), border = NA)
+# Example sample data point
+
+# Shade rejection region under H0 (right tail)
+alpha = 0.05
+crit <- qnorm(1 - alpha/2, mean = mean1, sd = sd1)
+x_tail <- x[x > crit]
+polygon(c(crit, x_tail, max(x_tail)),
+        c(0, dnorm(x_tail, 1, 1), 0),
+        col = adjustcolor("blue", 0.6), border = NA)
+        
+x_tail <- x[x < (-crit)]
+polygon(c(crit, x_tail, max(x_tail)),
+        c(0, dnorm(x_tail, 1, 1), 0),
+        col = adjustcolor("blue", 0.6), border = NA)
+# Example sample data point
+# Legend
+legend("topright", legend = c(expression(H[0]), expression(H[1])),
+       fill = c(rgb(1, 0, 0, 0.4), rgb(0, 0, 1, 0.4)),
+       border = c("red", "blue"))
+# plot criticial region
+```
+
+## Factors affecting power
+
+There are **four** main factors that affect power:
+
+-   Effect size: larger effects are easier to detect
+-   Sample size: larger samples give more information
+-   Significance level ($\alpha$): higher $\alpha$ (i.e. $\alpha=0.10$ vs $\alpha=0.05$ increases power)
+-   Variability in the data: less variability increases power
+
+# Visualizing power and type-I error
+
+## 
+
+```{r}
+#| echo: false
+plot_curves(mean1=0, mean2=2, obs=NA)
+```
+
+## 
+
+```{r}
+#| echo: false
+#| message: false
+plot_curves(mean1=0, mean2=2, obs=2)
+```
+
+## 
+
+```{r}
+#| echo: false
+plot_curves(mean1=0, mean2=4, obs=NA)
+```
+
+## 
+
+```{r}
+#| echo: false
+plot_curves(mean1=0, mean2=4, obs=1)
+```
+
+## 
+
+```{r}
+#| echo: false
+plot_curves(mean1=0, mean2=8, obs=1)
+```
+
+# Takeaway
+
+When the **effect size** gets larger, it becomes easier to distinguish between the null and alternative hypotheses.
+
+## 
+
+```{r}
+#| echo: false
+plot_curves(mean1=0, mean2=8, obs=2)
+```
+
+## 
+
+```{r}
+#| echo: false
+plot_curves(mean1=0, mean2=8, sd1=1.5, sd2=1.5, obs=2, xlim=c(-4, 12))
+```
+
+## 
+
+```{r}
+#| echo: false
+plot_curves(mean1=0, mean2=8, sd1=2, sd2=2, obs=2, xlim=c(-4, 12))
+```
+
+## 
+
+```{r}
+#| echo: false
+plot_curves(mean1=0, mean2=8, sd1=2.5, sd2=2.5, obs=2, xlim=c(-4, 12))
+```
+
+# Takeaway
+
+When the **variability** in the data increases, it becomes harder to distinguish between the null and alternative hypotheses.
+
+## 
+
+```{r}
+#| echo: false
+plot_curves(mean1=0, mean2=9, sd1=3, sd2=3, obs=3)
+```
+
+-   $H_0$: mean = 0, sd = 3
+-   $H_1$: mean = 9, sd = 3
+
+## 
+
+```{r}
+#| echo: false
+plot_curves(mean1=0, mean2=3, sd1=1, sd2=1, obs=1)
+```
+
+-   $H_0$: mean = 0, sd = 3
+-   $H_1$: mean = 9, sd = 3
+
+# Takeaway
+
+- What matters is the **standard effect size** (ratio of effect size to variability), not the absolute effect size or variability alone.
+- Related concept, Cohen's $d = \frac{|\mu_1 - \mu_2|}{\sigma}$.
+
+
+## $d=1.0$
+
+```{r}
+#| echo: false
+plot_curves(mean1=0, mean2=1, sd1=1, sd2=1)
+```
+
+## $d=0.1$
+
+```{r}
+#| echo: false
+plot_curves(mean1=0, mean2=0.1, sd1=1, sd2=1)
+```
+
+
+## What we have learned
+
+-   Standard effect sizes give us a way to compare power across different studies.
+-   If the standard effect size is very low, we will need a large sample to detect it.
+-   Otherwise your study is "underpowered".
+
+## Example of an underpowered study
+
+[![](images/clipboard-3054078535.png)](https://pubmed.ncbi.nlm.nih.gov/20855902/)
+
+## 
+- Study claimed that adopting a "power pose" produced hormonal changes and increased risk-taking behavior.
+- Sample size was 42 people (21 per group).
+- Claimed effect sizes were very large (Cohen's $d$ of 0.8 to 0.9).
+- Subsequent studies with larger samples failed to replicate.
+
+# Power analysis
+- In most psychology experiments $d$ is low, around 0.1 say.
+- What's the required sample size to detect such an effect with 80% power at $\alpha=0.05$?
+- (There is a closed-form solution, but first we will use simulations to figure it out.)
+
+## Simulations in R
+
+-   Simulations are a powerful tool for understanding statistical concepts.
+-   The basic idea is to generate random data according to some model, and then analyze that data
+-   By repeating this process many times, we can estimate quantities like power, bias, variance, etc.
+
+
+## Simulating this experiment
+-   We run an experiment with 42 people, half in treatment and half in control.
+-   So 21 power posers, 21 normal posers.
+-   We measure the testosterone level of each person.
+-   Suppose the true effect size is $d=0.1$.
+
+## Statistical model
+
+-   A **model** is a simplified representation of reality that captures the essential features of a phenomenon.
+-   Our model is that the control group has mean 0 and sd 1, and the treatment group has mean 0.1 and sd 1.
+-   (Is this a reasonable model??)
+
+## Translate a model into code
+
+First, we need to write a function that simulates a single person's testoterone level:
+
+```{webr}
+measure_person <- function(treatment, d) {
+  if (treatment) {
+    return(rnorm(1, mean=d, sd=1))
+  } else {
+    return(rnorm(1, mean=0, sd=1))
+  }
+}
+
+measure_person(TRUE, 0.1)
+```
+
+## Conduct the study
+```{webr}
+collect_data <- function(n, d) {
+  treated <- logical()
+  response <- numeric()
+  for (i in 1:n) {
+    treated <- c(treated, T)
+    response <- c(response, measure_person(TRUE, d))
+  }
+  for (i in 1:n) {
+    treated <- c(treated, F)
+    response <- c(response, measure_person(FALSE, d))
+  }
+  return(data.frame(treated=treated, response=response))
+}
+
+collect_data(42, .1)
+```
+
+## Analyzing the results
+```{webr}
+analyze_results <- function(df) {
+  t.test(df$response[df$treated], df$response[!df$treated])$p.value
+}
+
+analyze_results(collect_data(21, 0.1))
+```
+
+## Putting it all together
+
+Now we can put everything together into a single function that simulates the entire study:
+
+```{webr}
+run_study <- function(n, d, alpha) {
+  responses <- collect_data(n, d)
+  p <- analyze_results(responses) 
+  return(p < alpha)
+}
+
+set.seed(123)
+run_study(n=21, d=0.1, alpha=0.05)
+```
+
+## Estimating power
+
+To estimate power, we need to repeat the study many times and see how often we reject $H_0: d=0$:
+
+```{webr}
+estimate_power <- function(n, d, alpha, n_simulations) {
+  results <- c()
+  for (i in 1:n_simulations) {
+    result <- run_study(n, d, alpha)
+    results <- c(results, result)
+  }
+  power <- mean(results)
+  return(power)
+}
+```
+
+## Ingredients for estimating power
+
+Notice that we need to specify three things:
+
+-   Sample size ($n$)
+-   True effect size ($p$)
+-   Number of simulations to run (`n_simulations`)
+
+Which of these are under our control? Which of these improve power? Which of these cost money?
+
+## Estimating power for different sample sizes
+
+Now we can estimate power for different sample sizes:
+
+```{webr}
+sample_sizes <- (10, 20, 50, 100, 200, 500)
+f <- function(n) estimate_power(n=21, d=0.1, n_simulations=100))
+powers <- sample_sizes |>  map_dbl(f)
+power_df <- data.frame(sample_size = sample_sizes, power = powers)
+```
+
+## Figuring out the required sample size
+
+Now we can plot power as a function of sample size:
+
+```{webr}
+ggplot(power_df, aes(x=sample_size, y=power)) +
+  geom_line() +
+  geom_hline(yintercept=0.8, linetype="dashed", color="red") +
+  labs(title="Power vs Sample Size", x="Sample Size", y="Power")
+```
+
+
