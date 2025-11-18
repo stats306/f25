@@ -1,0 +1,173 @@
+---
+title: "DATASCI 306"
+subtitle: "Lecture 21"
+author: "[https://ds306.org/lectures/week13/lecture21.html](https://ds306.org/lectures/week13/lecture21.html)"
+format: live-revealjs
+engine: knitr
+webr:
+  packages:
+    - tidyverse
+  resources:
+    - data/nflgames.RData
+---
+
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+```{webr}
+#| echo: false
+#| message: false
+#| warning: false
+#| autorun: true
+library(tidyverse)
+load("data/nflgames.RData")
+```
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+load("data/nflgames.RData")
+```
+
+## Reminder about project
+
+-   Preliminary report is due one week from today.
+-   **You have to add yourself to a [Canvas group](https://umich.instructure.com/courses/796855/groups#tab-65342) in order to get credit**.
+-  (As of today, 4 have done so.)
+
+# Estimating home-field advantage
+
+## What is home-field advantage?
+
+-   Fact (?): home teams have an advantage over away teams.
+-   How to quantify it?
+-   How to estimate it from data?
+
+## NFL data
+
+```{webr}
+# nflgames <- nflreadr::load_schedules(1999:2025)
+nflgames
+```
+
+What does home field advantage mean in terms of these data?
+
+## Margin
+
+-   The margin of victory is defined as:
+
+    $$
+    \text{margin} = \text{home team score} - \text{away team score}
+    $$
+
+-   What's the average margin of victory for home teams in the NFL?
+
+```{webr}
+# margin of victory
+```
+
+## Controlling for team strength
+
+-   Home-field advantage may be confounded by team strength.
+
+-   Strong teams tend to win more often, and if strong teams happen to play more home games, that could bias our estimate of home-field advantage.
+
+-   To control for team strength we can add team-specific fixed effects:
+
+    $$
+    \text{margin}_i = \text{HFA} + \text{Strength}_{\text{home},i} - \text{Strength}_{\text{away},i} + \epsilon_i
+    $$
+
+## Fitting the model
+
+```{webr}
+# fit linear mixed model
+lm(margin ~ home_team + away_team, data = nflgames) |> summary()
+```
+
+What is the estimate of HFA here?
+
+## A model for team strengths
+
+-   Should we have that each team has a unique strength?
+-   We want a regression model that:
+    -   has one strength number for each team,
+    -   adds that number when the team is playing at home,
+    -   subtracts that number when the team is playing away.
+-   Does the model we just fit do that?
+
+## Assigning a unique strength to each team
+
+-   Build new columns in our model for each team:
+-   In the column for Team A:
+    -   Put +1 if Team A is the home team in that game
+    -   Put −1 if Team A is the away team
+    -   Put 0 otherwise
+
+## The revised model
+
+$$
+  \text{margin}_i = \text{HFA} + \text{home team strength}_i - \text{away team strength}_i + \epsilon_i
+$$
+
+## Generating the data
+
+```{r}
+all_teams <- sort(unique(c(nflgames$home_team, nflgames$away_team)))
+for (team in all_teams) {
+  nflgames[[team]] <- case_when(
+    nflgames$home_team == team ~ 1,
+    nflgames$away_team == team ~ -1,
+    .default = 0 
+  )
+}
+```
+
+## Revised model
+
+```{webr}
+# fit revised linear model
+lm(margin ~ ., data = nflgames[, c("margin", all_teams)]) |> summary()
+```
+
+## Going further
+
+Team ability varies by year:
+
+```{webr}
+all_years <- sort(unique(nflgames$season))
+for (team in all_teams) {
+  for (year in all_years) {
+    colname <- paste0(team, "_", year)
+    nflgames[[colname]] <- case_when(
+      nflgames$home_team == team & nflgames$season == year ~ 1,
+      nflgames$away_team == team & nflgames$season == year ~ -1,
+      .default = 0 
+    )
+  }
+}
+```
+
+## Final model
+
+```{webr}
+mdl <- nflgames |> select("margin", ends_with(as.character(all_years))) |>
+  lm(margin ~ ., data = _)
+summary(mdl)
+```
+
+## Best and worst teams
+
+```{webr}
+coef(mdl) |> sort() |> tail(10)
+```
+
+## Further questions
+
+-   There are lots of other questions we could explore:
+    -   How has home-field advantage changed over time?
+    -   Do some teams have larger home-field advantages than others?
+    -   What other factors (e.g. weather, crowd attendance, particular rivalries) contribute?
+- To probe these we'll develop [a web app](<https://gqg8ee-jonathan-terhorst.shinyapps.io/hfa_ds306f25/>).
+-  [Slides](https://github.com/stats306/f25/blob/main/lectures/week13/lecture21_gpt.ipynb)
