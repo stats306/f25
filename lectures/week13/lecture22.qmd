@@ -1,7 +1,7 @@
 ---
 title: "DATASCI 306"
 subtitle: "Lecture 22"
-author: "[https://ds306.org/lectures/week14/lecture22.html](https://ds306.org/lectures/week14/lecture22.html)"
+author: "[https://ds306.org/lectures/week13/lecture22.html](https://ds306.org/lectures/week13/lecture22.html)"
 format: live-revealjs
 engine: knitr
 webr:
