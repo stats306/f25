@@ -1,0 +1,330 @@
+---
+title: "DATASCI 306"
+subtitle: "🦃 Lecture 23 🍗"
+author: "[https://ds306.org/lectures/week14/lecture23.html](https://ds306.org/lectures/week14/lecture23.html)"
+format: live-revealjs
+engine: knitr
+webr:
+  packages:
+    - tidyverse
+  resources:
+    - "data/ncaa2025.RData"
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+```{webr}
+#| echo: false
+#| message: false
+#| warning: false
+#| autorun: true
+library(tidyverse)
+library(modelr)
+theme_set(theme_minimal())
+load("data/ncaa2025.RData")
+```
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+library(modelr)
+theme_set(theme_minimal())
+load("data/ncaa2025.RData")
+```
+
+![](images/clipboard-3364376047.png){fig-align="center"}
+
+## NCAA data
+
+Today we're going to study data from the latest season of NCAA
+basketball:
+
+```{webr}
+load("data/ncaa2025.RData")
+ncaa2025
+```
+
+## Home field advantage
+
+-   Last week we looked at a way to estimate home field advantage.
+-   We reasoned that the margin of victory for the home team was a
+    reasonable estimator, after controlling for team strength.
+-   However, estimating team strength is difficult; it's not directly
+    observed, and there are many different ways to define/estimate it.
+-   Today we'll look at a different way of measuring HFA, it situations
+    where the same teams play each other twice per season.
+
+## NCAA basketball data
+
+-   In many NCAA conferences, each pair of teams plays twice:\
+    once at each team’s home court.\
+-   These paired games provide a natural experiment.\
+-   Because the teams are the same and games occur in both venues,
+    differences in margins can be used to estimate the home-court
+    advantage.
+
+## Home-court advantage
+
+-   Assume the home team receives an additive boost of $h$ points.\
+-   If a team wins by $x$ at home, the expected neutral-court margin is
+    $x - h$.\
+-   If their neutral court margin is 0, then it's 50/50 whether they win
+    or lose.
+-   We seek the value of $x$ for which a neutral-court matchup becomes a
+    coin flip: $$
+    \Pr(\text{A beats B on neutral court} \mid \text{A’s home margin was } x) \approx \tfrac12 .
+    $$
+
+## Linking to Observable Outcomes
+
+-   We do not observe neutral-court games between these pairs.\
+-   To work around this, compare A’s home game to B’s home game.\
+-   If A beats B by $x$ at A’s home court, then on B’s court the
+    expected margin is
+
+$$
+x - 2h,
+$$
+
+since A loses its $+h$ boost and B gains one.
+
+## 
+
+$$
+\begin{align}
+\Pr(\text{A beats B on neutral court} \mid x)
+\\
+\approx
+\Pr(\text{A beats B on B’s court} \mid x + h).
+\end{align}
+$$
+
+## Interpretation
+
+-   The total swing between the two venues is $2h$.\
+-   A’s neutral-court advantage over B lies halfway between the two
+    observed margins.\
+-   Thus:
+    -   A home margin of $x + h$ corresponds to a neutral-court margin
+        of $x$.\
+    -   A’s home boost relative to B is $2h$, so the implied
+        neutral-court advantage is $h$.
+
+# Logistic Regression
+
+## Examples of binary outcomes
+
+-   In a medical dataset, predicting if the patient is prone to diabetes
+    or not.
+-   If a given email is a Spam email or not.
+-   If you take our nyc flights dataset, then will a flight is going to
+    be late or not.
+
+## Linear vs. logistic regression
+
+-   The linear model says:
+
+    $$y = f(a_0 + a_1 x)$$
+
+    for $f(x)=x$.
+
+-   For 0/1 outcomes, this won't work. (Why not?)
+
+-   Instead, let's think about modeling the *probability* that $y=1$:
+
+    $$\text{Prob}(y=1) = \underbrace{f(a_0 + a_1 x)}_{(\text{some function of the covariates})}$$
+
+## The logistic function
+
+What criteria should this function $f$ have?
+
+-   Its range needs to be $[0,1]$.
+-   For "extreme" values of $a_0 + a_1 x$ it should tend to zero or one.
+
+## Sigmoid function
+
+A function which satisfies both the properties is the **logistic
+function (a.k.a Sigmoid)**:
+$$f(x) = \frac{1}{1 + e^{-x}} =\frac{e^x}{1 + e^{x}} .$$
+
+$$f(a_0+a_1x) = \frac{e^{a_0+a_1x}}{1 + e^{a_0+a_1x}} .$$
+
+## Log-odds, logit, and sigmoid
+
+-   The *odds* of an event with probability $p$ is defined as
+
+    $$\text{odds} = \frac{p}{1-p}.$$
+
+-   The *logit* function is the function that maps a probability $p$ to
+    its log-odds:
+
+    $$\text{logit}(p) = \log\left(\frac{p}{1-p}\right).$$
+
+-   The *sigmoid* function is the inverse of the logit function:
+    sigmoid(logit(p)) = p.
+
+## Logistic vs. linear model
+
+```{r}
+# Code to show you the differenece between linear model and logistic model
+expand.grid(x=seq(-5, 5, .1)) |> ggplot(aes(x=x)) + 
+    stat_function(fun=function(x) (1 / (1 + exp(-x))), xlim=c(-5, 5), color="blue") +
+    stat_function(fun=function(x) 1/2 + x/5, xlim=c(-5, 5), color="red") +
+    annotate(x=3.5, y=1.5, geom="text", label="linear model (y=ax+b)", color="red") +
+    annotate(x=4.0, y=.85, geom="text", label="logistic model (logit(y)=ax+b)", color="blue") + 
+    ylab("predicted probability")
+```
+
+## Estimating logistic regression in R
+
+-   We use the `glm()` function, which stands for "generalized linear
+    model".
+-   Basic format: `glm(y ~ x, data=., family="binomial")`
+-   Make sure you specify `family="binomial"`! Otherwise you're getting
+    linear regression!
+
+## Example of logistic regression
+
+```{webr}
+Titanic |> as.data.frame() |> 
+  glm(Survived ~ Age + Sex + Class, data = _, family="binomial", weights=Freq) |> 
+  summary()
+```
+
+## Interpreting logistic regression
+
+```{r}
+#| echo: false
+tdf <- Titanic |> as.data.frame() |> mutate(Survived = Survived == "Yes")
+mdl <- glm(Survived ~ Age + Sex + Class, data = tdf, family="binomial", weights=Freq)
+summary(mdl)
+```
+
+## 
+
+```{webr}
+mdl
+```
+
+-   The coefficient is the predicted change in the *log-odds*.
+-   *Not* the predicted change in the probability.
+
+## Summarizing
+
+-   Linear regression:
+    $$\underbrace{\mathbb{E}(Y | X = x)}_{\text{conditional mean}} = ax +b$$
+-   Logistic regression:
+    $$\underbrace{\mathrm{logit}[\mathbb{P}(Y | X = x)]}_{\text{conditional prob.}} = ax +b$$
+
+## Estimating the HCA
+
+To estimate the home court advantage model, we need a d.f. that
+resembles:
+
+```         
+# A tibble: 8,958 × 2
+   beat_on_road home_margin
+   <lgl>              <dbl>
+ 1 FALSE                 22
+ 2 FALSE                  7
+ 3 FALSE                 -6
+ 4 TRUE                  30
+ 5 FALSE                 -9
+ 6 TRUE                  -3
+ 7 TRUE                  18
+ 8 FALSE                  2
+ 9 FALSE                 12
+10 TRUE                  10
+# … with 8,948 more rows
+```
+
+## Building the data
+
+I had to think for a few minutes about how to create this data frame.
+We'll to it in stages:
+
+```{webr}
+df1 <- inner_join(ncaa2025, ncaa2025, join_by(home == away, away == home))
+```
+
+## Step 2: create variables
+
+```{webr}
+df2 <- df1 |> mutate(
+  beat_on_road1 = home_score.x < away_score.x, 
+  home_margin1 = home_score.y - away_score.y,
+  beat_on_road2 = home_score.y < away_score.y, 
+  home_margin2 = home_score.x - away_score.x,
+)
+```
+
+## Step 3: pivot
+
+```{webr}
+df3 <- df2 |> pivot_longer(
+  c(starts_with("beat_on"), starts_with("home_margin")),
+  names_pattern = "(beat_on_road|home_margin)([12])",
+  names_to = c(".value", "pair")
+)
+```
+
+## Step 4: select and finalize
+
+```{webr}
+game_pairs <- select(df3, beat_on_road, home_margin)
+```
+
+## Visualize results
+
+```{webr}
+ggplot(game_pairs, aes(x = beat_on_road, y = home_margin)) + geom_boxplot()
+```
+
+## Fit model
+
+```{webr}
+mdl = glm(beat_on_road ~ home_margin, data = game_pairs, family = "binomial")
+summary(mdl)
+```
+
+## Assess model fit
+
+Let's see how well our logistic regression model fits to data:
+
+```{webr}
+predictions <- game_pairs |> group_by(home_margin) |> 
+    summarize(p_win = mean(beat_on_road), sdp = sd(beat_on_road)) |> 
+    add_predictions(mdl, type="response")
+predictions |> filter(abs(home_margin) < 10)
+```
+
+## Visualize model fit
+
+```{webr}
+predictions |>
+    ggplot(aes(x = home_margin)) + 
+    geom_col(aes(y = p_win)) + 
+    geom_line(aes(y = pred), color = "red")
+```
+
+## Computing HCA
+
+Our logistic regression model is
+
+$$\log \left( \frac{p}{1-p} \right) = a_0 + a_1 x.$$
+
+If $p=1/2$ then the LHS is zero, and we get simply $h = -a_0/a_1$.
+
+## 
+
+```{webr}
+beta = coef(mdl)
+beta
+h = -beta[1] / beta[2]
+h
+```
