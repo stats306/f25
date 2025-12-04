@@ -114,13 +114,21 @@ $$
 ## Generating the data
 
 ```{webr}
-# create strength column
+all_teams <- sort(unique(c(nflgames$home_team, nflgames$away_team)))
+for (team in all_teams) {
+  nflgames[[team]] <- case_when(
+    nflgames$home_team == team ~ 1,
+    nflgames$away_team == team ~ -1,
+    .default = 0 
+  )
+}
 ```
 
 ## Revised model
 
 ```{webr}
 # fit revised linear model
+lm(margin ~ ., data = nflgames[, c("margin", all_teams)]) |> summary()
 ```
 
 ## Going further
@@ -128,19 +136,31 @@ $$
 Team ability varies by year:
 
 ```{webr}
-# strength by year
+all_years <- sort(unique(nflgames$season))
+for (team in all_teams) {
+  for (year in all_years) {
+    colname <- paste0(team, "_", year)
+    nflgames[[colname]] <- case_when(
+      nflgames$home_team == team & nflgames$season == year ~ 1,
+      nflgames$away_team == team & nflgames$season == year ~ -1,
+      .default = 0 
+    )
+  }
+}
 ```
 
 ## Final model
 
 ```{webr}
-# final model
+mdl <- nflgames |> select("margin", ends_with(as.character(all_years))) |>
+  lm(margin ~ ., data = _)
+summary(mdl)
 ```
 
-## Strongest/weakest teams
+## Best and worst teams
 
 ```{webr}
-# strongest/weakest
+coef(mdl) |> sort() |> tail(10)
 ```
 
 ## Further questions
